@@ -19,9 +19,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
+     - name: Install dependencies
         run: |
-          pip install yfinance pandas_ta line-bot-sdk requests
+          python -m pip install --upgrade pip
+          pip install yfinance line-bot-sdk requests
+          pip install pandas-ta --pre
 
       - name: Run Trading Bot
         env:
