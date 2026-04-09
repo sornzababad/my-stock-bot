@@ -4,103 +4,84 @@ import pandas_ta as ta
 import requests
 import os
 
-# --- 1. ตั้งค่าการเชื่อมต่อ (ดึงจาก GitHub Secrets ของคุณ Apisorn) ---
+# --- 1. ตั้งค่าการเชื่อมต่อ (กุญแจ GitHub Secrets) ---
 LINE_ACCESS_TOKEN = os.getenv('CHANNEL_ACCESS_TOKEN')
 LINE_USER_ID = os.getenv('USER_ID')
 
 def send_to_line(message):
     url = 'https://api.line.me/v2/bot/message/push'
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {LINE_ACCESS_TOKEN}'
-    }
-    data = {
-        'to': LINE_USER_ID,
-        'messages': [{'type': 'text', 'text': message}]
-    }
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        return response.status_code
-    except Exception as e:
-        print(f"ส่ง LINE ไม่สำเร็จ: {e}")
-        return None
+    headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {LINE_ACCESS_TOKEN}'}
+    data = {'to': LINE_USER_ID, 'messages': [{'type': 'text', 'text': message}]}
+    requests.post(url, headers=headers, json=data)
 
-# --- 2. ฟังก์ชันแสกนหาจุดตัด EMA 20/200 ---
 def check_trade_signal(ticker):
     try:
-        # ดึงข้อมูลย้อนหลัง 1 ปี (เพื่อให้เส้น 200 นิ่ง)
         df = yf.download(ticker, period="1y", interval="1d", progress=False)
-        if df.empty or len(df) < 200:
-            return None
+        if df.empty or len(df) < 200: return None
 
-        # ปรับ Format ข้อมูล (แก้ปัญหา Multi-index ของ yfinance รุ่นใหม่)
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
-        # คำนวณ Technical Indicators
+        # คำนวณค่าทางเทคนิค (Moderate Risk: EMA + RSI Filter)
         df['EMA20'] = ta.ema(df['Close'], length=20)
         df['EMA200'] = ta.ema(df['Close'], length=200)
+        df['RSI'] = ta.rsi(df['Close'], length=14)
         df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
 
-        # ข้อมูลวันนี้และเมื่อวาน
         last = df.iloc[-1]
         prev = df.iloc[-2]
-        
         curr_price = float(last['Close'])
         atr = float(last['ATR']) if not pd.isna(last['ATR']) else 0
 
-        # --- กรณี Golden Cross (ตัดขึ้น) ---
+        # --- ตรรกะการคัดกรอง (Moderate) ---
         if (prev['EMA20'] < prev['EMA200']) and (last['EMA20'] > last['EMA200']):
-            sl = curr_price - (2 * atr)
-            tp = curr_price + (4 * atr)
-            return f"🚀 [GOLDEN CROSS] {ticker}\nราคา: {curr_price:.2f}\nเป้ากำไร: {tp:.2f}\nตัดขาดทุน: {sl:.2f}"
+            if 50 < last['RSI'] < 70: 
+                sl = curr_price - (1.5 * atr)
+                tp = curr_price + (3 * atr)
+                return (f"🔵 [MODERATE BUY] {ticker}\n"
+                        f"ราคา: {curr_price:.2f}\n"
+                        f"RSI: {last['RSI']:.1f}\n"
+                        f"เป้ากำไร: {tp:.2f} / จุดคัด: {sl:.2f}")
 
-        # --- กรณี Death Cross (ตัดลง) ---
         elif (prev['EMA20'] > prev['EMA200']) and (last['EMA20'] < last['EMA200']):
-            return f"💀 [DEATH CROSS] {ticker}\nราคา: {curr_price:.2f}\nสถานะ: เพิ่งตัดลงเป็นขาลง (พิจารณาขาย)"
+            return f"⚠️ [SELL SIGNAL] {ticker}\nราคา: {curr_price:.2f}\nสถานะ: ตัดลง ควรขายทำกำไร"
 
         return None
-    except Exception as e:
-        print(f"Error {ticker}: {e}")
+    except Exception:
         return None
 
-# --- 3. รายชื่อหุ้นชุดใหญ่ (100+ ตัว) ---
+# --- 2. รายชื่อหุ้นชุดใหญ่ (150+ ตัว) ---
 stocks = [
-    # US Tech & AI
-    'AAPL', 'MSFT', 'GOOGL', 'TSLA', 'NVDA', 'META', 'AMZN', 'NFLX', 'AMD', 'AVGO', 
-    'SMCI', 'PLTR', 'ARM', 'ORCL', 'ADBE', 'PYPL', 'INTC', 'QCOM', 'MU', 'PANW', 'ASML',
-    # US Financial & Blue Chip
-    'V', 'MA', 'JPM', 'BAC', 'GS', 'WMT', 'COST', 'DIS', 'NKE', 'SBUX', 'KO', 'PEP', 
-    'PFE', 'JNJ', 'UNH', 'XOM', 'CVX', 'BA', 'CAT', 'GE', 'ABNB', 'UBER',
-    # Thai Energy & Utility
-    'PTT.BK', 'PTTEP.BK', 'TOP.BK', 'GULF.BK', 'GPSC.BK', 'BGRIM.BK', 'EA.BK', 'BCP.BK', 
-    'IRPC.BK', 'SPRC.BK', 'OR.BK', 'EGCO.BK', 'RATCH.BK', 'BANPU.BK', 'IVL.BK', 'PTTGC.BK',
-    # Thai Banking & Finance
-    'KBANK.BK', 'SCB.BK', 'BBL.BK', 'KTB.BK', 'TISCO.BK', 'TTB.BK', 'KKP.BK', 'SAWAD.BK', 'MTC.BK', 'TIDLOR.BK',
-    # Thai Blue Chip & Retail
-    'CPALL.BK', 'AOT.BK', 'ADVANC.BK', 'DELTA.BK', 'SCC.BK', 'BDMS.BK', 'BH.BK', 'CPN.BK', 
-    'HMPRO.BK', 'GLOBAL.BK', 'CBG.BK', 'OSP.BK', 'MINT.BK', 'CRC.BK', 'TU.BK',
-    # Thai Tech & Logis
-    'TRUE.BK', 'HANA.BK', 'KCE.BK', 'JMT.BK', 'BTS.BK', 'BEM.BK', 'WHA.BK', 'AMATA.BK', 
-    'CENTEL.BK', 'COM7.BK', 'SCGP.BK', 'LH.BK', 'AP.BK', 'SIRI.BK'
+    # --- US BLUE CHIPS & GROWTH ---
+    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'AVGO', 'ORCL', 'ADBE',
+    'NFLX', 'AMD', 'CRM', 'INTC', 'QCOM', 'TXN', 'AMAT', 'MU', 'LRCX', 'PANW',
+    'V', 'MA', 'JPM', 'BAC', 'WFC', 'GS', 'MS', 'BLK', 'AXP', 'PYPL',
+    'WMT', 'COST', 'TGT', 'HD', 'LOW', 'NKE', 'SBUX', 'MCD', 'KO', 'PEP',
+    'PFE', 'JNJ', 'UNH', 'ABBV', 'MRK', 'LLY', 'TMO', 'DHR', 'ISRG', 'AMGN',
+    'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'BA', 'CAT', 'DE', 'GE', 'MMM',
+    'DIS', 'CMCSA', 'VZ', 'T', 'TMUS', 'AMT', 'PLD', 'CCI', 'EQIX', 'DLR',
+    
+    # --- US ETFs (แนะนำให้มีติดพอร์ต) ---
+    'SPY', 'VOO', 'IVV', 'QQQ', 'DIA', 'VTI', 'SCHD', 'VIG', 'VYM', 'IWM',
+    'XLK', 'XLF', 'XLV', 'XLP', 'XLY', 'XLE', 'XLI', 'SOXX', 'SMH', 'ARKK',
+
+    # --- THAI BLUE CHIPS (SET50/100) ---
+    'PTT.BK', 'PTTEP.BK', 'TOP.BK', 'OR.BK', 'BCP.BK', 'IRPC.BK', 'PTTGC.BK', 'IVL.BK',
+    'CPALL.BK', 'CPAXT.BK', 'BJC.BK', 'HMPRO.BK', 'GLOBAL.BK', 'CRC.BK', 'CPN.BK',
+    'AOT.BK', 'BA.BK', 'BEM.BK', 'BTS.BK', 'WHA.BK', 'AMATA.BK',
+    'ADVANC.BK', 'TRUE.BK', 'INTUCH.BK', 'DELTA.BK', 'HANA.BK', 'KCE.BK',
+    'KBANK.BK', 'SCB.BK', 'BBL.BK', 'KTB.BK', 'TTB.BK', 'TISCO.BK', 'KKP.BK',
+    'BDMS.BK', 'BH.BK', 'BCH.BK', 'CHG.BK',
+    'GULF.BK', 'GPSC.BK', 'BGRIM.BK', 'EA.BK', 'EGCO.BK', 'RATCH.BK', 'BANPU.BK',
+    'SCC.BK', 'SCGP.BK', 'CBG.BK', 'OSP.BK', 'TU.BK', 'MINT.BK', 'LH.BK', 'AP.BK', 'SIRI.BK'
 ]
 
-# --- 4. รันระบบแสกน ---
 found_signals = []
-print(f"กำลังเริ่มแสกนหุ้นทั้งหมด {len(stocks)} ตัว...")
-
 for s in stocks:
     signal = check_trade_signal(s)
-    if signal:
-        found_signals.append(signal)
+    if signal: found_signals.append(signal)
 
-# --- 5. ส่งสรุปผลเข้า LINE ---
 if found_signals:
-    for msg in found_signals:
-        send_to_line(msg)
+    for msg in found_signals: send_to_line(msg)
 else:
-    summary_text = (f"✅ บอทแสกนหุ้น {len(stocks)} ตัวเสร็จสิ้น\n"
-                    f"สถานะ: 😴 ไม่พบสัญญาณตัดกัน (Crossover) ของวันนี้ครับ")
-    send_to_line(summary_text)
-
-print("รันเสร็จเรียบร้อย!")
+    send_to_line(f"✅ แสกนหุ้น {len(stocks)} ตัวเสร็จสิ้น (17:00)\nสถานะ: 😴 ยังไม่พบจุดตัดใหม่ครับ")
