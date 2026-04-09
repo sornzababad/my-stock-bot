@@ -4,9 +4,9 @@ import pandas_ta as ta
 import requests
 import os
 
-# ตั้งค่า LINE
-LINE_ACCESS_TOKEN = os.getenv('LINE_ACCESS_TOKEN')
-LINE_USER_ID = os.getenv('LINE_USER_ID')
+# เปลี่ยนจากของเดิม ให้ชื่อตรงกับที่แสดงใน Log GitHub ของคุณ
+LINE_ACCESS_TOKEN = os.getenv('CHANNEL_ACCESS_TOKEN')
+LINE_USER_ID = os.getenv('USER_ID')
 
 def send_to_line(message):
     url = 'https://api.line.me/v2/bot/message/push'
