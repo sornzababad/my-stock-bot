@@ -5,7 +5,7 @@ import pandas as pd
 from linebot import LineBotApi
 from linebot.models import TextSendMessage
 
-# 1. ตั้งค่าระบบ (ดึงความลับจาก GitHub Secrets)
+# 1. ตั้งค่าระบบ
 CHANNEL_ACCESS_TOKEN = os.getenv('CHANNEL_ACCESS_TOKEN')
 USER_ID = os.getenv('USER_ID')
 
@@ -18,50 +18,43 @@ def send_to_line(message):
 
 def check_trade_signal(ticker):
     try:
-        # ดึงข้อมูลย้อนหลัง 1 ปี (ใช้ auto_adjust เพื่อลดปัญหาหัวตารางซ้อน)
-        df = yf.download(ticker, period="1y", interval="1d", progress=False, auto_adjust=True)
+        # ดึงข้อมูล และบังคับให้เหลือมิติเดียวด้วย .squeeze()
+        df = yf.download(ticker, period="1y", interval="1d", progress=False)
         
         if df.empty or len(df) < 200:
             return
+
+        # แก้ไขปัญหา Multi-index: บังคับให้หัวตารางเหลือชั้นเดียว
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
 
         # คำนวณอินดิเคเตอร์
         df['EMA20'] = ta.ema(df['Close'], length=20)
         df['EMA200'] = ta.ema(df['Close'], length=200)
         df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
 
-        # เช็คว่าแถวล่าสุดมีค่าครบไหม (ป้องกัน NoneType Error)
-        last_row = df.iloc[-1]
-        if pd.isna(last_row['EMA20']) or pd.isna(last_row['EMA200']) or pd.isna(last_row['Close']):
-            return
+        # ดึงแถวล่าสุดออกมา และทำให้มั่นใจว่าเป็นค่าเดี่ยวด้วย .item()
+        last_price = float(df['Close'].iloc[-1])
+        ema20 = float(df['EMA20'].iloc[-1])
+        ema200 = float(df['EMA200'].iloc[-1])
+        atr = float(df['ATR'].iloc[-1]) if not pd.isna(df['ATR'].iloc[-1]) else 0
 
-        # ดึงค่าออกมาเป็นตัวเลขทศนิยมเดี่ยวๆ
-        current_price = float(last_row['Close'])
-        ema20 = float(last_row['EMA20'])
-        ema200 = float(last_row['EMA200'])
-        atr = float(last_row['ATR']) if not pd.isna(last_row['ATR']) else 0
-
-        # --- กลยุทธ์ Bullish Pullback (เน้นความเสี่ยงต่ำ) ---
-        # 1. ราคาต้องอยู่เหนือ EMA 200 (แนวโน้มขาขึ้นใหญ่)
-        # 2. ราคาต้องอยู่ใกล้เส้น EMA 20 (จุดย่อตัวเพื่อเข้าซื้อ)
-        
-        if current_price > ema200:
-            # ถ้าราคาปัจจุบัน ต่ำกว่า EMA20 เล็กน้อย หรือ สูงกว่าไม่เกิน 1.5%
-            if current_price <= (ema20 * 1.015) and current_price >= (ema20 * 0.985):
-                stop_loss = current_price - (2 * atr)
-                
-                msg = (f"\n🎯 [Signal Found] {ticker}\n"
-                       f"Price: {current_price:.2f}\n"
-                       f"EMA20: {ema20:.2f}\n"
-                       f"Stop Loss: {stop_loss:.2f}\n"
-                       f"Trend: Bullish (Above EMA200)")
-                
+        # --- กลยุทธ์ Bullish Pullback ---
+        if last_price > ema200: # ขาขึ้น
+            # ราคาอยู่ใกล้ EMA20 ในระยะ +/- 1.5%
+            if (ema20 * 0.985) <= last_price <= (ema20 * 1.015):
+                stop_loss = last_price - (2 * atr)
+                msg = (f"\n🎯 [Signal] {ticker}\n"
+                       f"Price: {last_price:.2f}\n"
+                       f"SL: {stop_loss:.2f}\n"
+                       f"Trend: Above EMA200")
                 send_to_line(msg)
                 print(f"✅ Found signal for {ticker}")
 
     except Exception as e:
         print(f"❌ Error checking {ticker}: {str(e)}")
 
-# รายชื่อหุ้น (Top 100 US + หุ้นไทย)
+# รายชื่อหุ้น (Top 100 US + Thai)
 my_watchlist = [
     "AAPL", "ABBV", "ABT", "ACN", "ADBE", "AMAT", "AMD", "AMGN", "AMT", "AMZN",
     "AVGO", "AXP", "BA", "BAC", "BK", "BKNG", "BLK", "BMY", "C", "CAT",
