@@ -1,0 +1,31 @@
+name: Stock Scan Daily
+
+on:
+  schedule:
+    # ตั้งเวลาเป็น 10:30 UTC ซึ่งเท่ากับ 17:30 น. เวลาไทย (จันทร์-ศุกร์)
+    - cron: '30 10 * * 1-5'
+  workflow_dispatch: # เพิ่มปุ่มกดรันเองเพื่อทดสอบได้
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install yfinance pandas_ta line-bot-sdk requests
+
+      - name: Run Trading Bot
+        env:
+          # ดึงค่าความลับจาก Secrets ที่เราตั้งไว้ใน GitHub
+          CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_ACCESS_TOKEN }}
+          USER_ID: ${{ secrets.LINE_USER_ID }}
+        run: python trading_bot.py
