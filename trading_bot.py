@@ -1,76 +1,73 @@
 import yfinance as yf
-import pandas_ta as ta
-import os
 import pandas as pd
-from linebot import LineBotApi
-from linebot.models import TextSendMessage
+import pandas_ta as ta
+import requests
+import os
 
-# 1. ตั้งค่าระบบ
-CHANNEL_ACCESS_TOKEN = os.getenv('CHANNEL_ACCESS_TOKEN')
-USER_ID = os.getenv('USER_ID')
+# ตั้งค่า LINE (ดึงจาก GitHub Secrets)
+LINE_ACCESS_TOKEN = os.getenv('LINE_ACCESS_TOKEN')
+LINE_USER_ID = os.getenv('LINE_USER_ID')
 
 def send_to_line(message):
-    try:
-        line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
-        line_bot_api.push_message(USER_ID, TextSendMessage(text=message))
-    except Exception as e:
-        print(f"LINE Error: {e}")
+    url = 'https://api.line.me/v2/bot/message/push'
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {LINE_ACCESS_TOKEN}'
+    }
+    data = {
+        'to': LINE_USER_ID,
+        'messages': [{'type': 'text', 'text': message}]
+    }
+    response = requests.post(url, headers=headers, json=data)
+    return response.status_code
 
 def check_trade_signal(ticker):
     try:
-        # ดึงข้อมูล และบังคับให้เหลือมิติเดียวด้วย .squeeze()
+        # 1. ดึงข้อมูล (ใช้ระยะเวลา 1 ปีเพื่อให้เส้น EMA200 นิ่งพอ)
         df = yf.download(ticker, period="1y", interval="1d", progress=False)
-        
-        if df.empty or len(df) < 200:
-            return
+        if df.empty or len(df) < 200: return
 
-        # แก้ไขปัญหา Multi-index: บังคับให้หัวตารางเหลือชั้นเดียว
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
-        # คำนวณอินดิเคเตอร์
+        # 2. คำนวณเส้น EMA 20 และ 200
         df['EMA20'] = ta.ema(df['Close'], length=20)
         df['EMA200'] = ta.ema(df['Close'], length=200)
         df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
 
-        # ดึงแถวล่าสุดออกมา และทำให้มั่นใจว่าเป็นค่าเดี่ยวด้วย .item()
-        last_price = float(df['Close'].iloc[-1])
-        ema20 = float(df['EMA20'].iloc[-1])
-        ema200 = float(df['EMA200'].iloc[-1])
-        atr = float(df['ATR'].iloc[-1]) if not pd.isna(df['ATR'].iloc[-1]) else 0
+        # 3. ดึงข้อมูล "วันนี้" และ "เมื่อวาน" มาเปรียบเทียบ
+        last_row = df.iloc[-1]
+        prev_row = df.iloc[-2]
+        
+        current_price = float(last_row['Close'])
+        atr = float(last_row['ATR']) if not pd.isna(last_row['ATR']) else 0
 
-        # --- กลยุทธ์ Bullish Pullback ---
-        if last_price > ema200: # ขาขึ้น
-            # ราคาอยู่ใกล้ EMA20 ในระยะ +/- 1.5%
-            if (ema20 * 0.985) <= last_price <= (ema20 * 1.015):
-                stop_loss = last_price - (2 * atr)
-                msg = (f"\n🎯 [Signal] {ticker}\n"
-                       f"Price: {last_price:.2f}\n"
-                       f"SL: {stop_loss:.2f}\n"
-                       f"Trend: Above EMA200")
-                send_to_line(msg)
-                print(f"✅ Found signal for {ticker}")
+        # --- 🚀 สัญญาณตัดขึ้น (Golden Cross) ---
+        # เมื่อวาน 20 < 200 และ วันนี้ 20 > 200
+        if (prev_row['EMA20'] < prev_row['EMA200']) and (last_row['EMA20'] > last_row['EMA200']):
+            sl = current_price - (2 * atr)
+            tp = current_price + (4 * atr)
+            msg = (f"\n🚀 [GOLDEN CROSS] {ticker}\n"
+                   f"Price: {current_price:.2f}\n"
+                   f"Signal: เส้นสั้นตัดขึ้น (เพิ่งเปลี่ยนเป็นขาขึ้นวันนี้)\n"
+                   f"Target Profit: {tp:.2f}\n"
+                   f"Stop Loss: {sl:.2f}")
+            send_to_line(msg)
+
+        # --- 💀 สัญญาณตัดลง (Death Cross) ---
+        # เมื่อวาน 20 > 200 และ วันนี้ 20 < 200
+        elif (prev_row['EMA20'] > prev_row['EMA200']) and (last_row['EMA20'] < last_row['EMA200']):
+            msg = (f"\n💀 [DEATH CROSS] {ticker}\n"
+                   f"Price: {current_price:.2f}\n"
+                   f"Signal: เส้นสั้นตัดลง (เพิ่งหลุดเป็นขาลงวันนี้)\n"
+                   f"Action: พิจารณาขายทำกำไร/ลดพอร์ตครับ")
+            send_to_line(msg)
 
     except Exception as e:
         print(f"❌ Error checking {ticker}: {str(e)}")
 
-# รายชื่อหุ้น (Top 100 US + Thai)
-my_watchlist = [
-    "AAPL", "ABBV", "ABT", "ACN", "ADBE", "AMAT", "AMD", "AMGN", "AMT", "AMZN",
-    "AVGO", "AXP", "BA", "BAC", "BK", "BKNG", "BLK", "BMY", "C", "CAT",
-    "CL", "CMCSA", "COF", "COP", "COST", "CRM", "CSCO", "CVS", "CVX", "DE",
-    "DHR", "DIS", "DUK", "EMR", "FDX", "GD", "GE", "GEV", "GILD", "GM",
-    "GOOG", "GOOGL", "GS", "HD", "HON", "IBM", "INTC", "INTU", "ISRG", "JNJ",
-    "JPM", "KO", "LIN", "LLY", "LMT", "LOW", "LRCX", "MA", "MCD", "MDLZ",
-    "MDT", "META", "MMM", "MO", "MRK", "MS", "MSFT", "NEE", "NFLX", "NKE",
-    "NVDA", "ORCL", "PEP", "PFE", "PG", "PM", "PYPL", "QCOM", "RTX", "SBUX",
-    "SCHW", "SO", "SPGI", "T", "TGT", "TJX", "TMUS", "TSLA", "TXN", "UNH",
-    "UNP", "UPS", "USB", "V", "VZ", "WFC", "WMT", "XOM",
-    "PTT.BK", "CPALL.BK", "ADVANC.BK", "GULF.BK", "AOT.BK"
-]
+# รายชื่อหุ้นที่ต้องการแสกน (คุณเพิ่ม/ลดเองได้ที่นี่)
+stocks = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'NVDA', 'CPALL.BK', 'AOT.BK', 'PTT.BK']
 
-if __name__ == "__main__":
-    print(f"🚀 Starting scan for {len(my_watchlist)} stocks...")
-    for stock in my_watchlist:
-        check_trade_signal(stock)
-    print("✅ Scan completed successfully.")
+for s in stocks:
+    check_trade_signal(s)
