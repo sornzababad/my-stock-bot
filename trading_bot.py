@@ -26,15 +26,15 @@ def check_trade_signal(ticker):
         df['EMA200'] = ta.ema(df['Close'], length=200)
         df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
         
-        last_price = df['Close'].iloc[-1]
-        ema20 = df['EMA20'].iloc[-1]
-        ema200 = df['EMA200'].iloc[-1]
-        atr = df['ATR'].iloc[-1]
+        # แก้ไขจุดนี้: ใช้ .iloc[-1] และ .item() เพื่อดึงค่าตัวเลขออกมาให้ชัวร์
+        last_price = float(df['Close'].iloc[-1].iloc[0] if hasattr(df['Close'].iloc[-1], '__len__') else df['Close'].iloc[-1])
+        ema20 = float(df['EMA20'].iloc[-1])
+        ema200 = float(df['EMA200'].iloc[-1])
+        atr = float(df['ATR'].iloc[-1])
 
-        # 🟢 เงื่อนไขการซื้อ: ขาขึ้น (เหนือ EMA200) และราคาย่อตัวมาใกล้เส้น EMA20 (บวกไม่เกิน 1%)
-        if last_price > ema200 and last_price <= ema20 * 1.01:
+        # 🟢 เงื่อนไขการซื้อ: ขาขึ้น และ ราคาย่อมาใกล้เส้น EMA20
+        if last_price > ema200 and last_price <= (ema20 * 1.01):
             stop_loss = last_price - (2 * atr)
-            # ตัดหน่วยบาทออกเพื่อให้รองรับทั้งสองตลาด
             msg = (f"\n🎯 [Signal] {ticker}\n"
                    f"Price: {last_price:.2f}\n"
                    f"Stop Loss: {stop_loss:.2f}")
@@ -43,8 +43,6 @@ def check_trade_signal(ticker):
             
     except Exception as e:
         print(f"Error checking {ticker}: {e}")
-
-# --- รายชื่อหุ้น Top 100 อเมริกา + หุ้นไทยที่คุณสนใจ ---
 my_watchlist = [
     # US Stocks (S&P 100)
     "AAPL", "ABBV", "ABT", "ACN", "ADBE", "AMAT", "AMD", "AMGN", "AMT", "AMZN",
