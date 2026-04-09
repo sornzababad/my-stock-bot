@@ -1,29 +1,30 @@
-name: Stock Scan Daily
+name: Trading Bot Daily Alert
 
 on:
   schedule:
-    - cron: '30 10 * * 1-5'
+    # 10:00 UTC คือ 17:00 น. เวลาไทย
+    - cron: '0 10 * * 1-5'
   workflow_dispatch:
 
 jobs:
-  run-bot:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v2
         with:
-          python-version: '3.12'
+          python-version: '3.9'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install yfinance line-bot-sdk requests pandas-ta --pre
+          pip install yfinance pandas pandas_ta requests
 
-      - name: Run Bot
+      - name: Run Trading Bot
         env:
-          CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_ACCESS_TOKEN }}
-          USER_ID: ${{ secrets.LINE_USER_ID }}
+          CHANNEL_ACCESS_TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
+          USER_ID: ${{ secrets.USER_ID }}
         run: python trading_bot.py
