@@ -1,12 +1,12 @@
 import yfinance as yf
 import pandas as pd
 import requests
+import anthropic
 import os
 from datetime import datetime, timezone, timedelta
 
 TZ_THAI = timezone(timedelta(hours=7))
 
-# --- 1. การเชื่อมต่อ LINE ---
 LINE_ACCESS_TOKEN = os.getenv('CHANNEL_ACCESS_TOKEN')
 LINE_USER_ID = os.getenv('USER_ID')
 
@@ -14,7 +14,6 @@ def send_to_line(message):
     if not LINE_ACCESS_TOKEN or not LINE_USER_ID:
         print(f"[ERROR] Missing secrets: TOKEN={'SET' if LINE_ACCESS_TOKEN else 'MISSING'}, USER_ID={'SET' if LINE_USER_ID else 'MISSING'}")
         return False
-
     url = 'https://api.line.me/v2/bot/message/push'
     headers = {
         'Content-Type': 'application/json',
@@ -24,7 +23,6 @@ def send_to_line(message):
         'to': LINE_USER_ID,
         'messages': [{'type': 'text', 'text': message}]
     }
-
     try:
         response = requests.post(url, headers=headers, json=data, timeout=10)
         print(f"[LINE] Status: {response.status_code} | Body: {response.text}")
@@ -32,6 +30,39 @@ def send_to_line(message):
     except Exception as e:
         print(f"[LINE ERROR] {e}")
         return False
+
+def analyze_with_claude(ticker, signal_type, price, rsi, atr, tp=None, sl=None):
+    try:
+        client = anthropic.Anthropic()
+
+        tp_sl_text = ""
+        if tp and sl:
+            tp_sl_text = f"TP: {tp:.2f} | SL: {sl:.2f}"
+
+        prompt = f"""คุณเป็นนักวิเคราะห์หุ้นสำหรับนักลงทุนระยะกลาง-ยาว
+
+หุ้น {ticker} เกิดสัญญาณ {signal_type}
+ราคาปัจจุบัน: {price:.2f}
+RSI: {rsi:.1f}
+ATR: {atr:.2f}
+{tp_sl_text}
+
+วิเคราะห์สั้นๆ ภาษาไทย ไม่เกิน 4 บรรทัด โดยบอก:
+1. ทำไม setup นี้น่าสนใจหรือน่ากังวล
+2. ความเสี่ยงหลักที่ควรระวัง
+3. เหมาะกับระยะเวลาถือครองแค่ไหน
+
+จบด้วย Conviction: X/5 (1=ต่ำ 5=สูง)"""
+
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return message.content[0].text
+    except Exception as e:
+        print(f"[CLAUDE ERROR] {ticker}: {e}")
+        return None
 
 def check_trade_signal(ticker):
     try:
@@ -43,18 +74,15 @@ def check_trade_signal(ticker):
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
-        # EMA
         df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
         df['EMA200'] = df['Close'].ewm(span=200, adjust=False).mean()
 
-        # RSI
         delta = df['Close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         df['RSI'] = 100 - (100 / (1 + rs))
 
-        # ATR
         high_low = df['High'] - df['Low']
         high_close = abs(df['High'] - df['Close'].shift())
         low_close = abs(df['Low'] - df['Close'].shift())
@@ -73,20 +101,22 @@ def check_trade_signal(ticker):
         if ema_cross_up and (45 < rsi < 75):
             sl = curr_price - (1.5 * atr)
             tp = curr_price + (3 * atr)
-            return (
+            signal_text = (
                 f"🔵 [BUY] {ticker}\n"
                 f"ราคา: {curr_price:.2f}\n"
                 f"RSI: {rsi:.1f}\n"
                 f"TP: {tp:.2f} | SL: {sl:.2f}"
             )
+            return ("BUY", signal_text, curr_price, rsi, atr, tp, sl)
 
         elif ema_cross_dn:
-            return (
+            signal_text = (
                 f"🔴 [SELL] {ticker}\n"
                 f"ราคา: {curr_price:.2f}\n"
                 f"RSI: {rsi:.1f}\n"
                 f"สถานะ: EMA20 ตัดลงต่ำกว่า EMA200"
             )
+            return ("SELL", signal_text, curr_price, rsi, atr, None, None)
 
         return None
 
@@ -119,10 +149,19 @@ print(f"[INFO] สแกนหุ้นทั้งหมด {len(stocks)} ต�
 
 found_signals = []
 for s in stocks:
-    signal = check_trade_signal(s)
-    if signal:
-        print(f"[SIGNAL] {signal[:50]}...")
-        found_signals.append(signal)
+    result = check_trade_signal(s)
+    if result:
+        signal_type, signal_text, price, rsi, atr, tp, sl = result
+        print(f"[SIGNAL] {s} — {signal_type}")
+
+        ai_text = analyze_with_claude(s, signal_type, price, rsi, atr, tp, sl)
+
+        if ai_text:
+            full_message = signal_text + "\n\n🤖 AI วิเคราะห์:\n" + ai_text
+        else:
+            full_message = signal_text
+
+        found_signals.append(full_message)
 
 print(f"[DONE] พบสัญญาณ {len(found_signals)} ตัว")
 
