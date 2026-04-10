@@ -26,20 +26,20 @@ jobs:
       - name: Verify secrets are set
         run: |
           if [ -z "$CHANNEL_ACCESS_TOKEN" ]; then
-            echo "❌ ERROR: CHANNEL_ACCESS_TOKEN is not set!"
+            echo "ERROR: LINE_ACCESS_TOKEN is not set!"
             exit 1
           fi
           if [ -z "$USER_ID" ]; then
-            echo "❌ ERROR: USER_ID is not set!"
+            echo "ERROR: LINE_USER_ID is not set!"
             exit 1
           fi
-          echo "✅ Secrets verified"
+          echo "Secrets verified OK"
         env:
-          CHANNEL_ACCESS_TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
-          USER_ID: ${{ secrets.USER_ID }}
+          CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_ACCESS_TOKEN }}
+          USER_ID: ${{ secrets.LINE_USER_ID }}
 
       - name: Run Trading Bot
         env:
-          CHANNEL_ACCESS_TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
-          USER_ID: ${{ secrets.USER_ID }}
+          CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_ACCESS_TOKEN }}
+          USER_ID: ${{ secrets.LINE_USER_ID }}
         run: python trading_bot.py
