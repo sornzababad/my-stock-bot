@@ -1,4 +1,4 @@
-from flask import Flask, request, abort
+from flask import Flask, request, jsonify
 import requests
 import anthropic
 import os
@@ -35,30 +35,39 @@ def ask_claude(user_message):
     except Exception as e:
         return f"ขออภัย เกิดข้อผิดพลาด: {str(e)}"
 
-@app.route('/webhook', methods=['GET', 'POST'])
+@app.route('/webhook', methods=['GET', 'POST', 'HEAD', 'OPTIONS'])
 def webhook():
-    if request.method == 'GET':
+    print(f"[REQUEST] Method: {request.method}")
+    print(f"[REQUEST] Headers: {dict(request.headers)}")
+
+    if request.method in ['GET', 'HEAD', 'OPTIONS']:
         return 'OK', 200
 
-    body = request.get_json()
+    if request.method == 'POST':
+        try:
+            body = request.get_json(silent=True)
+            print(f"[BODY] {body}")
 
-    if not body or 'events' not in body:
+            if not body or 'events' not in body:
+                return 'OK', 200
+
+            for event in body['events']:
+                if event.get('type') == 'message' and event['message'].get('type') == 'text':
+                    reply_token = event['replyToken']
+                    user_text = event['message']['text']
+                    print(f"[USER] {user_text}")
+                    response = ask_claude(user_text)
+                    print(f"[CLAUDE] {response}")
+                    reply_to_line(reply_token, response)
+
+        except Exception as e:
+            print(f"[ERROR] {e}")
+
         return 'OK', 200
-
-    for event in body['events']:
-        if event.get('type') == 'message' and event['message'].get('type') == 'text':
-            reply_token = event['replyToken']
-            user_text = event['message']['text']
-
-            print(f"[USER] {user_text}")
-            response = ask_claude(user_text)
-            print(f"[CLAUDE] {response}")
-
-            reply_to_line(reply_token, response)
 
     return 'OK', 200
 
-@app.route('/', methods=['GET'])
+@app.route('/', methods=['GET', 'HEAD'])
 def health():
     return 'Bot is running!', 200
 
