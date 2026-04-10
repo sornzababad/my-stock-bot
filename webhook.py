@@ -35,12 +35,15 @@ def ask_claude(user_message):
     except Exception as e:
         return f"ขออภัย เกิดข้อผิดพลาด: {str(e)}"
 
-@app.route('/webhook', methods=['POST'])
+@app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
+    if request.method == 'GET':
+        return 'OK', 200
+
     body = request.get_json()
 
     if not body or 'events' not in body:
-        abort(400)
+        return 'OK', 200
 
     for event in body['events']:
         if event.get('type') == 'message' and event['message'].get('type') == 'text':
