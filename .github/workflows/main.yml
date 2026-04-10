@@ -2,9 +2,10 @@ name: Trading Bot Daily Alert
 
 on:
   schedule:
-    # 10:00 UTC คือ 17:00 น. เวลาไทย
+    # 10:00 UTC คือ 17:00 น. เวลาไทย (UTC+7)
+    # รันทุกวันจันทร์ - ศุกร์
     - cron: '0 10 * * 1-5'
-  workflow_dispatch:
+  workflow_dispatch: # ปุ่มสำหรับกด Run เองด้วยมือ
 
 jobs:
   build:
@@ -16,15 +17,18 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: '3.12'
+          python-version: '3.10' # ขยับขึ้นมาเป็น 3.10 เพื่อความเสถียร
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install yfinance pandas pandas-ta requests
+          pip install yfinance pandas requests
+          # ติดตั้ง pandas-ta โดยระบุชื่อโปรเจกต์ที่ถูกต้อง
+          pip install pandas-ta
 
       - name: Run Trading Bot
         env:
+          # ดึงค่าจาก Secrets ที่คุณตั้งไว้
           CHANNEL_ACCESS_TOKEN: ${{ secrets.CHANNEL_ACCESS_TOKEN }}
           USER_ID: ${{ secrets.USER_ID }}
         run: python trading_bot.py
