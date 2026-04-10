@@ -2,7 +2,9 @@ import yfinance as yf
 import pandas as pd
 import requests
 import os
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+TZ_THAI = timezone(timedelta(hours=7))
 
 # --- 1. การเชื่อมต่อ LINE ---
 LINE_ACCESS_TOKEN = os.getenv('CHANNEL_ACCESS_TOKEN')
@@ -65,7 +67,6 @@ def check_trade_signal(ticker):
         atr = float(last['ATR']) if not pd.isna(last['ATR']) else 0
         rsi = float(last['RSI']) if not pd.isna(last['RSI']) else 0
 
-        # --- BUY Signal: EMA20 ตัดขึ้นเหนือ EMA200 + RSI อยู่ในช่วงเหมาะสม ---
         ema_cross_up = (float(prev['EMA20']) < float(prev['EMA200'])) and (float(last['EMA20']) > float(last['EMA200']))
         ema_cross_dn = (float(prev['EMA20']) > float(prev['EMA200'])) and (float(last['EMA20']) < float(last['EMA200']))
 
@@ -113,7 +114,7 @@ stocks = [
 ]
 
 # --- Main ---
-print(f"[START] บอทเริ่มทำงาน {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+print(f"[START] บอทเริ่มทำงาน {datetime.now(TZ_THAI).strftime('%Y-%m-%d %H:%M:%S')}")
 print(f"[INFO] สแกนหุ้นทั้งหมด {len(stocks)} ตัว")
 
 found_signals = []
@@ -126,11 +127,10 @@ for s in stocks:
 print(f"[DONE] พบสัญญาณ {len(found_signals)} ตัว")
 
 if found_signals:
-    # ส่งทีละข้อความ
     for msg in found_signals:
         send_to_line(msg)
 else:
-    now_str = datetime.now().strftime('%d/%m/%Y %H:%M')
+    now_str = datetime.now(TZ_THAI).strftime('%d/%m/%Y %H:%M')
     send_to_line(
         f"✅ สแกนหุ้น {len(stocks)} ตัวเสร็จสิ้น\n"
         f"🕐 {now_str}\n"
