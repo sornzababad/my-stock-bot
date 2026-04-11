@@ -2,3 +2,7 @@ flask
 requests
 anthropic
 gunicorn
+yfinance
+pandas
+gspread
+google-auth
