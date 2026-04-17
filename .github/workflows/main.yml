@@ -1,31 +1,51 @@
-name: Crypto Bot Every 1 Hour
+name: Trading Bot Daily Alert
 
 on:
   schedule:
-    - cron: '0 * * * *' # รันทุกต้นชั่วโมง (เช่น 10:00, 11:00)
-  workflow_dispatch: # ปุ่มกดรันเองเพื่อทดสอบ
+    - cron: '0 10 * * 1-5'  # 17:00 น. เวลาไทย (UTC+7)
+  workflow_dispatch:         # รันมือได้ทุกเมื่อ
 
 jobs:
-  build:
+  run-bot:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install dependencies
         run: |
-          pip install python-binance pandas ta requests google-genai
+          python -m pip install --upgrade pip
+          pip install yfinance pandas requests anthropic
 
-      - name: Run bot
+      - name: Verify secrets are set
+        run: |
+          if [ -z "$CHANNEL_ACCESS_TOKEN" ]; then
+            echo "ERROR: LINE_ACCESS_TOKEN is not set!"
+            exit 1
+          fi
+          if [ -z "$USER_ID" ]; then
+            echo "ERROR: LINE_USER_ID is not set!"
+            exit 1
+          fi
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ERROR: ANTHROPIC_API_KEY is not set!"
+            exit 1
+          fi
+          echo "Secrets verified OK"
         env:
-          BINANCE_KEY: ${{ secrets.BINANCE_KEY }}
-          BINANCE_SECRET: ${{ secrets.BINANCE_SECRET }}
-          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
-          LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
-          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
-        run: python main.py
+          CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_ACCESS_TOKEN }}
+          USER_ID: ${{ secrets.LINE_USER_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Run Trading Bot
+        env:
+          CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_ACCESS_TOKEN }}
+          USER_ID: ${{ secrets.LINE_USER_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python trading_bot.py
