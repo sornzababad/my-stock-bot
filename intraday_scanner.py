@@ -24,9 +24,11 @@ INTRADAY_STOCKS = [
 ]
 
 def push_flex(obj):
+    alt = obj.get('altText', '')
+    msgs = [{'type': 'text', 'text': alt}, obj] if alt else [obj]
     requests.post('https://api.line.me/v2/bot/message/push',
                   headers={'Content-Type':'application/json','Authorization':f'Bearer {LINE_TOKEN}'},
-                  json={'to':LINE_UID,'messages':[obj]}, timeout=10)
+                  json={'to':LINE_UID,'messages':msgs}, timeout=10)
 
 def _sep():   return {"type":"separator","color":"#37474F","margin":"sm"}
 def _kv(l,v): return {"type":"box","layout":"horizontal","margin":"xs","contents":[

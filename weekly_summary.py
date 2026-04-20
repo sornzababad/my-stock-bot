@@ -23,9 +23,11 @@ STOCKS = [
 ]
 
 def push_flex(obj):
+    alt = obj.get('altText', '')
+    msgs = [{'type': 'text', 'text': alt}, obj] if alt else [obj]
     requests.post('https://api.line.me/v2/bot/message/push',
                   headers={'Content-Type':'application/json','Authorization':f'Bearer {LINE_TOKEN}'},
-                  json={'to':LINE_UID,'messages':[obj]}, timeout=10)
+                  json={'to':LINE_UID,'messages':msgs}, timeout=10)
 
 def push_text(msg):
     requests.post('https://api.line.me/v2/bot/message/push',
