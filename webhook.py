@@ -9,6 +9,7 @@ Features:
 from flask import Flask, request
 import requests, anthropic, yfinance as yf, pandas as pd
 import os, json, re, time, threading
+from users import load_users, add_user, remove_user
 from datetime import datetime, timezone, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
@@ -99,21 +100,21 @@ def reply_line(reply_token, message):
                   timeout=10)
 
 def push_line(message):
-    uid = os.getenv('USER_ID') or os.getenv('LINE_USER_ID')
-    if not uid: return
-    requests.post('https://api.line.me/v2/bot/message/push',
+    uids = load_users()
+    if not uids: return
+    requests.post('https://api.line.me/v2/bot/message/multicast',
                   headers={'Content-Type':'application/json','Authorization':f'Bearer {LINE_TOKEN}'},
-                  json={'to':uid,'messages':[{'type':'text','text':message}]},
+                  json={'to':uids,'messages':[{'type':'text','text':message}]},
                   timeout=10)
 
 def push_flex(flex_obj):
-    uid = os.getenv('USER_ID') or os.getenv('LINE_USER_ID')
-    if not uid: return
+    uids = load_users()
+    if not uids: return
     alt = flex_obj.get('altText', '')
     msgs = [{'type': 'text', 'text': alt}, flex_obj] if alt else [flex_obj]
-    requests.post('https://api.line.me/v2/bot/message/push',
+    requests.post('https://api.line.me/v2/bot/message/multicast',
                   headers={'Content-Type':'application/json','Authorization':f'Bearer {LINE_TOKEN}'},
-                  json={'to':uid,'messages':msgs},
+                  json={'to':uids,'messages':msgs},
                   timeout=10)
 
 # ── NEW: AI stock analysis ────────────────────────────────────────
@@ -403,12 +404,27 @@ def webhook():
             if body and 'events' in body:
                 portfolio = load_portfolio()
                 for event in body['events']:
-                    if event.get('type')=='message' and event['message'].get('type')=='text':
+                    etype = event.get('type')
+                    if etype == 'message' and event['message'].get('type') == 'text':
                         rt   = event['replyToken']
                         text = event['message']['text']
                         print(f"[USER] {text}")
                         resp = process_message(text, portfolio)
                         reply_line(rt, resp)
+                    elif etype == 'follow':
+                        uid = event.get('source', {}).get('userId')
+                        if uid:
+                            add_user(uid)
+                            print(f"[FOLLOW] {uid}")
+                            requests.post('https://api.line.me/v2/bot/message/push',
+                                headers={'Content-Type':'application/json','Authorization':f'Bearer {LINE_TOKEN}'},
+                                json={'to':uid,'messages':[{'type':'text','text':'ยินดีต้อนรับ! 📈 คุณจะได้รับการแจ้งเตือนหุ้นอัตโนมัติแล้วนะครับ'}]},
+                                timeout=10)
+                    elif etype == 'unfollow':
+                        uid = event.get('source', {}).get('userId')
+                        if uid:
+                            remove_user(uid)
+                            print(f"[UNFOLLOW] {uid}")
         except Exception as e:
             print(f"[ERROR] {e}")
     return 'OK', 200

@@ -11,6 +11,7 @@ import pandas as pd
 import requests
 import anthropic
 import os, re, time, json
+from users import load_users
 from datetime import datetime, timezone, timedelta
 
 TZ_THAI = timezone(timedelta(hours=7))
@@ -62,17 +63,21 @@ def tv_snapshot_url(ticker: str) -> str:
 # ── LINE push ─────────────────────────────────────────────────────
 
 def push_messages(messages: list) -> bool:
-    if not LINE_TOKEN or not LINE_UID:
-        print(f"[ERROR] TOKEN={'SET' if LINE_TOKEN else 'MISSING'}")
+    if not LINE_TOKEN:
+        print("[ERROR] TOKEN MISSING")
+        return False
+    uids = load_users()
+    if not uids:
+        print("[ERROR] No users registered")
         return False
     alt = messages[0].get('altText', '') if messages else ''
     all_msgs = ([{'type': 'text', 'text': alt}] + messages) if alt else messages
     for i in range(0, len(all_msgs), 5):
         r = requests.post(
-            'https://api.line.me/v2/bot/message/push',
+            'https://api.line.me/v2/bot/message/multicast',
             headers={'Content-Type':'application/json',
                      'Authorization':f'Bearer {LINE_TOKEN}'},
-            json={'to': LINE_UID, 'messages': all_msgs[i:i+5]},
+            json={'to': uids, 'messages': all_msgs[i:i+5]},
             timeout=10
         )
         print(f"[LINE] {r.status_code} | {r.text[:120]}")

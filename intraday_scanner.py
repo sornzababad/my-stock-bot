@@ -7,6 +7,7 @@ import pandas as pd
 import requests
 import anthropic
 import os, re, time, json
+from users import load_users
 from datetime import datetime, timezone, timedelta
 
 TZ_THAI    = timezone(timedelta(hours=7))
@@ -24,11 +25,13 @@ INTRADAY_STOCKS = [
 ]
 
 def push_flex(obj):
+    uids = load_users()
+    if not uids: return
     alt = obj.get('altText', '')
     msgs = [{'type': 'text', 'text': alt}, obj] if alt else [obj]
-    requests.post('https://api.line.me/v2/bot/message/push',
+    requests.post('https://api.line.me/v2/bot/message/multicast',
                   headers={'Content-Type':'application/json','Authorization':f'Bearer {LINE_TOKEN}'},
-                  json={'to':LINE_UID,'messages':msgs}, timeout=10)
+                  json={'to':uids,'messages':msgs}, timeout=10)
 
 def _sep():   return {"type":"separator","color":"#37474F","margin":"sm"}
 def _kv(l,v): return {"type":"box","layout":"horizontal","margin":"xs","contents":[
