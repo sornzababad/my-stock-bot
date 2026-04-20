@@ -1,10 +1,32 @@
-name: Trading Bot Daily Alert
+name: Trading Bot
 
 on:
   schedule:
-    - cron: '5 10 * * 1-5'   # 17:05 ICT (SET close)
-    - cron: '5 21 * * 1-5'   # 04:05 ICT next day (US close)
+    # ── Daily close scanners ──────────────────────────────────────
+    - cron: '5 10 * * 1-5'    # 🇹🇭 SET close  17:05 ICT
+    - cron: '5 21 * * 1-5'    # 🇺🇸 US  close  04:05 ICT
+
+    # ── Intraday scanner (every 1h during market hours) ───────────
+    - cron: '0 2-10 * * 1-5'  # 🇹🇭 SET hours  09:00-17:00 ICT
+    - cron: '0 14-21 * * 1-5' # 🇺🇸 US  hours  21:00-04:00 ICT
+
+    # ── Weekly summary (Friday 17:30 ICT) ─────────────────────────
+    - cron: '30 10 * * 5'
+
   workflow_dispatch:
+    inputs:
+      job:
+        description: 'Which job to run'
+        required: true
+        default: 'daily'
+        type: choice
+        options: [daily, intraday, weekly]
+      market:
+        description: 'Market (for daily)'
+        required: false
+        default: 'both'
+        type: choice
+        options: [both, thai, us]
 
 jobs:
   run-bot:
@@ -12,37 +34,71 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install yfinance pandas requests "anthropic>=0.25.0"
+        run: pip install yfinance pandas requests "anthropic>=0.25.0" flask gunicorn gspread google-auth
 
       - name: Verify secrets
         run: |
-          echo "Checking secrets..."
-          [ -z "$CHANNEL_ACCESS_TOKEN" ] && echo "ERROR: CHANNEL_ACCESS_TOKEN missing!" && exit 1
-          [ -z "$USER_ID" ]              && echo "ERROR: USER_ID missing!"              && exit 1
-          [ -z "$ANTHROPIC_API_KEY" ]    && echo "ERROR: ANTHROPIC_API_KEY missing!"    && exit 1
-          echo "✅ All secrets present"
-          echo "TOKEN starts with: ${CHANNEL_ACCESS_TOKEN:0:6}..."
-          echo "USER_ID starts with: ${USER_ID:0:4}..."
+          [ -z "$CHANNEL_ACCESS_TOKEN" ] && echo "❌ CHANNEL_ACCESS_TOKEN missing" && exit 1
+          [ -z "$USER_ID" ]              && echo "❌ USER_ID missing"              && exit 1
+          [ -z "$ANTHROPIC_API_KEY" ]    && echo "❌ ANTHROPIC_API_KEY missing"    && exit 1
+          echo "✅ Secrets OK"
         env:
           CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_ACCESS_TOKEN }}
           USER_ID:               ${{ secrets.LINE_USER_ID }}
           ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
 
-      - name: Run Trading Bot
+      - name: Decide which script to run
+        id: decide
+        run: |
+          HOUR=$(date -u +%H)
+          EVENT="${{ github.event_name }}"
+          JOB="${{ github.event.inputs.job }}"
+          MARKET="${{ github.event.inputs.market || 'both' }}"
+
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "script=$JOB" >> $GITHUB_OUTPUT
+            echo "market=$MARKET" >> $GITHUB_OUTPUT
+          elif [ "$HOUR" = "10" ] && [ "$(date -u +%M)" = "30" ]; then
+            echo "script=weekly"   >> $GITHUB_OUTPUT
+          elif [ "$HOUR" = "10" ]; then
+            echo "script=daily"    >> $GITHUB_OUTPUT
+            echo "market=thai"     >> $GITHUB_OUTPUT
+          elif [ "$HOUR" = "21" ]; then
+            echo "script=daily"    >> $GITHUB_OUTPUT
+            echo "market=us"       >> $GITHUB_OUTPUT
+          else
+            echo "script=intraday" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run daily scanner
+        if: steps.decide.outputs.script == 'daily'
         env:
           CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_ACCESS_TOKEN }}
           USER_ID:               ${{ secrets.LINE_USER_ID }}
           ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
-        run: python trading_bot.py
+        run: |
+          python trading_bot.py --market "${{ steps.decide.outputs.market || 'both' }}" 2>/dev/null || python trading_bot.py
+
+      - name: Run intraday scanner
+        if: steps.decide.outputs.script == 'intraday'
+        env:
+          CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_ACCESS_TOKEN }}
+          USER_ID:               ${{ secrets.LINE_USER_ID }}
+          ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python intraday_scanner.py
+
+      - name: Run weekly summary
+        if: steps.decide.outputs.script == 'weekly'
+        env:
+          CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_ACCESS_TOKEN }}
+          USER_ID:               ${{ secrets.LINE_USER_ID }}
+          ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python weekly_summary.py
