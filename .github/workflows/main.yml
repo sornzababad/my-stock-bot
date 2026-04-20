@@ -2,12 +2,14 @@ name: Trading Bot Daily Alert
 
 on:
   schedule:
-    - cron: '0 10 * * 1-5'  # 17:00 น. เวลาไทย (UTC+7)
-  workflow_dispatch:         # รันมือได้ทุกเมื่อ
+    - cron: '5 10 * * 1-5'   # 17:05 ICT (SET close)
+    - cron: '5 21 * * 1-5'   # 04:05 ICT next day (US close)
+  workflow_dispatch:
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -17,35 +19,30 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install yfinance pandas requests anthropic
+          pip install yfinance pandas requests "anthropic>=0.25.0"
 
-      - name: Verify secrets are set
+      - name: Verify secrets
         run: |
-          if [ -z "$CHANNEL_ACCESS_TOKEN" ]; then
-            echo "ERROR: LINE_ACCESS_TOKEN is not set!"
-            exit 1
-          fi
-          if [ -z "$USER_ID" ]; then
-            echo "ERROR: LINE_USER_ID is not set!"
-            exit 1
-          fi
-          if [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "ERROR: ANTHROPIC_API_KEY is not set!"
-            exit 1
-          fi
-          echo "Secrets verified OK"
+          echo "Checking secrets..."
+          [ -z "$CHANNEL_ACCESS_TOKEN" ] && echo "ERROR: CHANNEL_ACCESS_TOKEN missing!" && exit 1
+          [ -z "$USER_ID" ]              && echo "ERROR: USER_ID missing!"              && exit 1
+          [ -z "$ANTHROPIC_API_KEY" ]    && echo "ERROR: ANTHROPIC_API_KEY missing!"    && exit 1
+          echo "✅ All secrets present"
+          echo "TOKEN starts with: ${CHANNEL_ACCESS_TOKEN:0:6}..."
+          echo "USER_ID starts with: ${USER_ID:0:4}..."
         env:
           CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_ACCESS_TOKEN }}
-          USER_ID: ${{ secrets.LINE_USER_ID }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          USER_ID:               ${{ secrets.LINE_USER_ID }}
+          ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Run Trading Bot
         env:
           CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_ACCESS_TOKEN }}
-          USER_ID: ${{ secrets.LINE_USER_ID }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          USER_ID:               ${{ secrets.LINE_USER_ID }}
+          ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
         run: python trading_bot.py
