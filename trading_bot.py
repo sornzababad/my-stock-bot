@@ -70,14 +70,12 @@ def push_messages(messages: list) -> bool:
     if not uids:
         print("[ERROR] No users registered")
         return False
-    alt = messages[0].get('altText', '') if messages else ''
-    all_msgs = ([{'type': 'text', 'text': alt}] + messages) if alt else messages
-    for i in range(0, len(all_msgs), 5):
+    for i in range(0, len(messages), 5):
         r = requests.post(
             'https://api.line.me/v2/bot/message/multicast',
             headers={'Content-Type':'application/json',
                      'Authorization':f'Bearer {LINE_TOKEN}'},
-            json={'to': uids, 'messages': all_msgs[i:i+5]},
+            json={'to': uids, 'messages': messages[i:i+5]},
             timeout=10
         )
         print(f"[LINE] {r.status_code} | {r.text[:120]}")
