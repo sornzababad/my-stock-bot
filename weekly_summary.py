@@ -26,11 +26,9 @@ STOCKS = [
 def push_flex(obj):
     uids = load_users()
     if not uids: return
-    alt = obj.get('altText', '')
-    msgs = [{'type': 'text', 'text': alt}, obj] if alt else [obj]
     requests.post('https://api.line.me/v2/bot/message/multicast',
                   headers={'Content-Type':'application/json','Authorization':f'Bearer {LINE_TOKEN}'},
-                  json={'to':uids,'messages':msgs}, timeout=10)
+                  json={'to':uids,'messages':[obj]}, timeout=10)
 
 def push_text(msg):
     uids = load_users()

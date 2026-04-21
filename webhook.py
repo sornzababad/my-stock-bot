@@ -110,11 +110,9 @@ def push_line(message):
 def push_flex(flex_obj):
     uids = load_users()
     if not uids: return
-    alt = flex_obj.get('altText', '')
-    msgs = [{'type': 'text', 'text': alt}, flex_obj] if alt else [flex_obj]
     requests.post('https://api.line.me/v2/bot/message/multicast',
                   headers={'Content-Type':'application/json','Authorization':f'Bearer {LINE_TOKEN}'},
-                  json={'to':uids,'messages':msgs},
+                  json={'to':uids,'messages':[flex_obj]},
                   timeout=10)
 
 # ── NEW: AI stock analysis ────────────────────────────────────────
