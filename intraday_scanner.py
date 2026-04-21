@@ -67,17 +67,15 @@ def tv_url(ticker):
     sym = ("SET:"+ticker.replace(".BK","")) if ticker.endswith(".BK") else ticker
     return f"https://www.tradingview.com/chart/?symbol={sym}&interval=60&studies=STD%3BEMA%4020%2C%2050%2C%20200"
 
-def flex_intraday_card(ticker, sig, price, rsi, atr, reason, currency):
+def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency):
     is_buy  = sig == "BUY"
     bc      = "#00C851" if is_buy else "#FF4444"
     bt      = "🟢 INTRADAY BUY" if is_buy else "🔴 INTRADAY SELL"
     hbg     = "#0D3321" if is_buy else "#3E0A0A"
     now     = datetime.now(TZ_THAI).strftime("%H:%M")
     rsi_bar = "█"*int(rsi/10) + "░"*(10-int(rsi/10))
-
-    tp = price + 2*atr if is_buy else price - 2*atr
-    sl = price - 1*atr if is_buy else price + 1*atr
-    rr = abs(tp - price) / abs(price - sl) if abs(price - sl) > 0 else 0
+    rr      = abs(tp - price) / abs(price - sl) if abs(price - sl) > 0 else 0
+    src_tag = "📍 Swing" if tp_src == "swing" else "📐 ATR"
 
     body = [
         {"type":"box","layout":"horizontal","contents":[
@@ -88,8 +86,8 @@ def flex_intraday_card(ticker, sig, price, rsi, atr, reason, currency):
         _sep(),
         _kv("📊 RSI", f"[{rsi_bar}]  {rsi:.1f}"),
         _sep(),
-        _kv("🎯 TP", f"{currency}{tp:,.2f}"),
-        _kv("🛡 SL", f"{currency}{sl:,.2f}"),
+        _kv("🎯 TP", f"{currency}{tp:,.2f}  {src_tag}"),
+        _kv("🛡 SL", f"{currency}{sl:,.2f}  {src_tag}"),
         _kv("📏 R:R", f"1 : {rr:.1f}"),
     ]
 
@@ -107,6 +105,42 @@ def flex_intraday_card(ticker, sig, price, rsi, atr, reason, currency):
             ]}
         }
     }
+
+def find_swing_tp_sl(sig, price, atr, df, window=5):
+    highs = df['High'].values
+    lows  = df['Low'].values
+    n     = len(highs)
+
+    swing_highs, swing_lows = [], []
+    for i in range(window, n - window):
+        if all(highs[i] >= highs[i-j] for j in range(1, window+1)) and \
+           all(highs[i] >= highs[i+j] for j in range(1, window+1)):
+            swing_highs.append(highs[i])
+        if all(lows[i] <= lows[i-j] for j in range(1, window+1)) and \
+           all(lows[i] <= lows[i+j] for j in range(1, window+1)):
+            swing_lows.append(lows[i])
+
+    if sig == "BUY":
+        sl_cands = [l for l in swing_lows  if l < price * 0.999]
+        tp_cands = [h for h in swing_highs if h > price * 1.001]
+        sl = max(sl_cands) if sl_cands else price - atr
+        tp = min(tp_cands) if tp_cands else price + 2*atr
+    else:
+        sl_cands = [h for h in swing_highs if h > price * 1.001]
+        tp_cands = [l for l in swing_lows  if l < price * 0.999]
+        sl = min(sl_cands) if sl_cands else price + atr
+        tp = max(tp_cands) if tp_cands else price - 2*atr
+
+    used_swing = bool(sl_cands and tp_cands)
+    # sanity check: R:R ≥ 1 and SL/TP on correct side
+    rr = abs(tp - price) / abs(price - sl) if abs(price - sl) > 0 else 0
+    if rr < 1 or (sig == "BUY" and (tp <= price or sl >= price)) or \
+                 (sig == "SELL" and (tp >= price or sl <= price)):
+        sl = price - atr if sig == "BUY" else price + atr
+        tp = price + 2*atr if sig == "BUY" else price - 2*atr
+        used_swing = False
+
+    return tp, sl, "swing" if used_swing else "atr"
 
 def check_intraday(ticker):
     df = yf.download(ticker, period="5d", interval="1h", progress=False, auto_adjust=True)
@@ -129,15 +163,21 @@ def check_intraday(ticker):
     price = float(last['Close'])
     rsi   = float(last['RSI']) if not pd.isna(last['RSI']) else 50
 
+    sig = None
     if rsi <= 25:
-        return ("BUY",  price, rsi, atr, f"RSI ต่ำมาก {rsi:.1f} — Oversold รุนแรง 🔻")
-    if rsi >= 75:
-        return ("SELL", price, rsi, atr, f"RSI สูงมาก {rsi:.1f} — Overbought รุนแรง 🔺")
-    if price > float(last['BB_U'])*1.005:
-        return ("SELL", price, rsi, atr, f"ราคาทะลุ Upper BB — Breakout 🔺")
-    if price < float(last['BB_L'])*0.995:
-        return ("BUY",  price, rsi, atr, f"ราคาหลุด Lower BB — Oversold Squeeze 🔻")
-    return None
+        sig, reason = "BUY",  f"RSI ต่ำมาก {rsi:.1f} — Oversold รุนแรง 🔻"
+    elif rsi >= 75:
+        sig, reason = "SELL", f"RSI สูงมาก {rsi:.1f} — Overbought รุนแรง 🔺"
+    elif price > float(last['BB_U'])*1.005:
+        sig, reason = "SELL", f"ราคาทะลุ Upper BB — Breakout 🔺"
+    elif price < float(last['BB_L'])*0.995:
+        sig, reason = "BUY",  f"ราคาหลุด Lower BB — Oversold Squeeze 🔻"
+
+    if sig is None:
+        return None
+
+    tp, sl, tp_src = find_swing_tp_sl(sig, price, atr, df)
+    return (sig, price, rsi, tp, sl, tp_src, reason)
 
 def main():
     now = datetime.now(TZ_THAI)
@@ -153,13 +193,13 @@ def main():
             errors += 1
             continue
         if not res: continue
-        sig, price, rsi, atr, reason = res
+        sig, price, rsi, tp, sl, tp_src, reason = res
         is_thai  = ticker.endswith(".BK")
         currency = "฿" if is_thai else "$"
         display  = ticker.replace(".BK","") if is_thai else ticker
-        card     = flex_intraday_card(display, sig, price, rsi, atr, reason, currency)
+        card     = flex_intraday_card(display, sig, price, rsi, tp, sl, tp_src, reason, currency)
         signals.append(card)
-        print(f"[SIGNAL] {ticker} {sig} RSI:{rsi:.1f} TP:{price+2*atr:.2f} SL:{price-atr:.2f}")
+        print(f"[SIGNAL] {ticker} {sig} RSI:{rsi:.1f} TP:{tp:.2f} SL:{sl:.2f} src:{tp_src}")
         time.sleep(0.1)
 
     total = len(INTRADAY_STOCKS)
