@@ -73,44 +73,44 @@ def flex_intraday_card(ticker, sig, price, rsi, reason, currency):
     }
 
 def check_intraday(ticker):
-    try:
-        df = yf.download(ticker, period="5d", interval="1h", progress=False, auto_adjust=True)
-        if df.empty or len(df) < 20: return None
-        if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
+    df = yf.download(ticker, period="5d", interval="1h", progress=False, auto_adjust=True)
+    if df.empty or len(df) < 20: return None
+    if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
 
-        d = df['Close'].diff()
-        df['RSI'] = 100-(100/(1+d.where(d>0,0).rolling(14).mean()/(-d.where(d<0,0)).rolling(14).mean()))
-        bm = df['Close'].rolling(20).mean()
-        bs = df['Close'].rolling(20).std()
-        df['BB_U'] = bm + 2*bs
-        df['BB_L'] = bm - 2*bs
+    d = df['Close'].diff()
+    df['RSI'] = 100-(100/(1+d.where(d>0,0).rolling(14).mean()/(-d.where(d<0,0)).rolling(14).mean()))
+    bm = df['Close'].rolling(20).mean()
+    bs = df['Close'].rolling(20).std()
+    df['BB_U'] = bm + 2*bs
+    df['BB_L'] = bm - 2*bs
 
-        last  = df.iloc[-1]
-        price = float(last['Close'])
-        rsi   = float(last['RSI']) if not pd.isna(last['RSI']) else 50
+    last  = df.iloc[-1]
+    price = float(last['Close'])
+    rsi   = float(last['RSI']) if not pd.isna(last['RSI']) else 50
 
-        # RSI extreme
-        if rsi <= 25:
-            return ("BUY", price, rsi, f"RSI ต่ำมาก {rsi:.1f} — Oversold รุนแรง 🔻")
-        if rsi >= 75:
-            return ("SELL", price, rsi, f"RSI สูงมาก {rsi:.1f} — Overbought รุนแรง 🔺")
-
-        # Bollinger breakout
-        if price > float(last['BB_U'])*1.005:
-            return ("SELL", price, rsi, f"ราคาทะลุ Upper BB — Breakout 🔺")
-        if price < float(last['BB_L'])*0.995:
-            return ("BUY",  price, rsi, f"ราคาหลุด Lower BB — Oversold Squeeze 🔻")
-        return None
-    except Exception as e:
-        print(f"[INTRADAY] {ticker}: {e}"); return None
+    if rsi <= 25:
+        return ("BUY", price, rsi, f"RSI ต่ำมาก {rsi:.1f} — Oversold รุนแรง 🔻")
+    if rsi >= 75:
+        return ("SELL", price, rsi, f"RSI สูงมาก {rsi:.1f} — Overbought รุนแรง 🔺")
+    if price > float(last['BB_U'])*1.005:
+        return ("SELL", price, rsi, f"ราคาทะลุ Upper BB — Breakout 🔺")
+    if price < float(last['BB_L'])*0.995:
+        return ("BUY",  price, rsi, f"ราคาหลุด Lower BB — Oversold Squeeze 🔻")
+    return None
 
 def main():
     now = datetime.now(TZ_THAI)
     print(f"[INTRADAY] {now.strftime('%Y-%m-%d %H:%M')}")
 
     signals = []
+    errors  = 0
     for ticker in INTRADAY_STOCKS:
-        res = check_intraday(ticker)
+        try:
+            res = check_intraday(ticker)
+        except Exception as e:
+            print(f"[ERROR] {ticker}: {e}")
+            errors += 1
+            continue
         if not res: continue
         sig, price, rsi, reason = res
         is_thai  = ticker.endswith(".BK")
@@ -121,6 +121,25 @@ def main():
         print(f"[SIGNAL] {ticker} {sig} RSI:{rsi:.1f}")
         time.sleep(0.1)
 
+    total = len(INTRADAY_STOCKS)
+    print(f"[DONE] สแกน {total} | สัญญาณ {len(signals)} | error {errors}")
+
+    if errors > total // 2:
+        push_flex({
+            "type": "flex", "altText": "⚠️ Intraday Scanner — ดึงข้อมูลไม่ได้",
+            "contents": {"type": "bubble", "size": "kilo",
+                "body": {"type": "box", "layout": "vertical", "backgroundColor": "#1E2A3A",
+                    "paddingAll": "16px", "contents": [
+                        {"type": "text", "text": "⚠️ Intraday Scanner Error", "weight": "bold",
+                         "color": "#FF4444", "size": "md"},
+                        {"type": "text", "text": f"ดึงข้อมูลไม่ได้ {errors}/{total} ตัว",
+                         "color": "#CFD8DC", "size": "sm", "margin": "sm"},
+                        {"type": "text", "text": "อาจเป็นปัญหา yfinance หรือ network",
+                         "color": "#90CAF9", "size": "xs", "wrap": True, "margin": "xs"},
+                    ]}}
+        })
+        return
+
     if signals:
         bubbles = [card['contents'] for card in signals]
         now_str = datetime.now(TZ_THAI).strftime("%d %b %Y  %H:%M")
@@ -130,9 +149,6 @@ def main():
             "contents": {"type": "carousel", "contents": bubbles[:12]}
         }
         push_flex(carousel)
-        print(f"[DONE] ส่ง {len(signals)} สัญญาณ")
-    else:
-        print("[DONE] ไม่พบสัญญาณ intraday")
 
 if __name__ == "__main__":
     main()
