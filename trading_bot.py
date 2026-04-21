@@ -11,6 +11,7 @@ import pandas as pd
 import requests
 import anthropic
 import os, re, time, json
+from users import load_users
 from datetime import datetime, timezone, timedelta
 
 TZ_THAI = timezone(timedelta(hours=7))
@@ -62,15 +63,21 @@ def tv_snapshot_url(ticker: str) -> str:
 # ── LINE push ─────────────────────────────────────────────────────
 
 def push_messages(messages: list) -> bool:
-    if not LINE_TOKEN or not LINE_UID:
-        print(f"[ERROR] TOKEN={'SET' if LINE_TOKEN else 'MISSING'}")
+    if not LINE_TOKEN:
+        print("[ERROR] TOKEN MISSING")
         return False
-    for i in range(0, len(messages), 5):
+    uids = load_users()
+    if not uids:
+        print("[ERROR] No users registered")
+        return False
+    alt = messages[0].get('altText', '') if messages else ''
+    all_msgs = ([{'type': 'text', 'text': alt}] + messages) if alt else messages
+    for i in range(0, len(all_msgs), 5):
         r = requests.post(
-            'https://api.line.me/v2/bot/message/push',
+            'https://api.line.me/v2/bot/message/multicast',
             headers={'Content-Type':'application/json',
                      'Authorization':f'Bearer {LINE_TOKEN}'},
-            json={'to': LINE_UID, 'messages': messages[i:i+5]},
+            json={'to': uids, 'messages': all_msgs[i:i+5]},
             timeout=10
         )
         print(f"[LINE] {r.status_code} | {r.text[:120]}")
@@ -348,16 +355,20 @@ def send_market(sigs, flag, market, idx_name, idx_price, idx_chg,
         push_messages([flex_no_signal(flag,market,idx_name,idx_price,idx_chg,scan_n,scan_s)])
         return
 
-    msgs = [flex_header(flag,market,idx_name,idx_price,idx_chg,
-                        scan_n,scan_s,buy_n,watch_n,exit_n,ai_fil,
-                        mkt_summary(idx_chg))]
-    for _, _, (card, ticker) in sigs:
-        msgs.append(card)
-        img = image_msg(ticker)
-        if img:
-            msgs.append(img)
+    header = flex_header(flag,market,idx_name,idx_price,idx_chg,
+                         scan_n,scan_s,buy_n,watch_n,exit_n,ai_fil,
+                         mkt_summary(idx_chg))
 
-    push_messages(msgs)
+    bubbles = [header['contents']]
+    for _, _, (card, _) in sigs:
+        bubbles.append(card['contents'])
+
+    carousel = {
+        "type": "flex",
+        "altText": header.get('altText', f"{flag} {market} Alert"),
+        "contents": {"type": "carousel", "contents": bubbles[:12]}
+    }
+    push_messages([carousel])
 
 # ── MAIN ─────────────────────────────────────────────────────────
 
