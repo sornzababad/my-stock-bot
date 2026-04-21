@@ -122,9 +122,14 @@ def main():
         time.sleep(0.1)
 
     if signals:
-        for card in signals:
-            push_flex(card)
-            time.sleep(0.3)
+        bubbles = [card['contents'] for card in signals]
+        now_str = datetime.now(TZ_THAI).strftime("%d %b %Y  %H:%M")
+        carousel = {
+            "type": "flex",
+            "altText": f"⏰ Intraday Alert — {len(signals)} สัญญาณ  {now_str}",
+            "contents": {"type": "carousel", "contents": bubbles[:12]}
+        }
+        push_flex(carousel)
         print(f"[DONE] ส่ง {len(signals)} สัญญาณ")
     else:
         print("[DONE] ไม่พบสัญญาณ intraday")
