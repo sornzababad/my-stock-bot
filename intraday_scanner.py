@@ -1,6 +1,7 @@
 """
 intraday_scanner.py  —  Intraday scanner (1h interval)
 Runs during market hours and alerts on RSI extremes + BB breakouts
+Signals are filtered by Claude AI (conviction ≥ 3/5)
 """
 import yfinance as yf
 import pandas as pd
@@ -12,25 +13,42 @@ from datetime import datetime, timezone, timedelta
 
 TZ_THAI    = timezone(timedelta(hours=7))
 LINE_TOKEN = os.getenv('CHANNEL_ACCESS_TOKEN')
-LINE_UID   = os.getenv('USER_ID')
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 
 INTRADAY_STOCKS = list(dict.fromkeys([
-    # ── US Tech ──────────────────────────────────────────────────
+    # ── US Mega-cap Tech ─────────────────────────────────────────
     'AAPL','MSFT','NVDA','AMD','META','GOOGL','AMZN','TSLA',
-    'INTC','QCOM','AVGO','CRM','ORCL','NFLX','ADBE',
-    'PLTR','CRWD','NET','SNOW','DDOG','COIN','MSTR',
+    'AVGO','ORCL','NFLX','ADBE','CRM','INTC','QCOM',
+
+    # ── US Semiconductor ─────────────────────────────────────────
+    'MU','LRCX','AMAT','TXN','MRVL','ON','KLAC','ASML',
+
+    # ── US Software / Cloud ──────────────────────────────────────
+    'NOW','WDAY','INTU','TEAM','DDOG','SNOW','NET','CRWD',
+
+    # ── US High-volatility / Crypto-adjacent ─────────────────────
+    'PLTR','COIN','MSTR','HOOD','SQ','RIOT','MARA',
 
     # ── US Banking / Finance ─────────────────────────────────────
-    'JPM','BAC','GS','MS','WFC','C','V','MA','AXP','PYPL',
+    'JPM','BAC','GS','MS','WFC','C','BLK','SCHW',
+    'V','MA','AXP','PYPL','COF',
 
     # ── US Energy ────────────────────────────────────────────────
-    'XOM','CVX','COP','SLB','EOG',
+    'XOM','CVX','COP','SLB','EOG','OXY','MPC','HAL',
 
-    # ── US Health ────────────────────────────────────────────────
+    # ── US Health / Biotech ──────────────────────────────────────
     'UNH','JNJ','PFE','ABBV','LLY','MRK','AMGN',
+    'GILD','REGN','VRTX','MRNA','TMO','ISRG',
 
-    # ── US ETF / Index ───────────────────────────────────────────
-    'SPY','QQQ','IWM','GLD',
+    # ── US Consumer ──────────────────────────────────────────────
+    'WMT','COST','TGT','HD','NKE','SBUX','MCD','KO','PEP',
+    'BABA','MELI','SHOP',
+
+    # ── US EV / Auto ─────────────────────────────────────────────
+    'F','GM','RIVN',
+
+    # ── US ETF ───────────────────────────────────────────────────
+    'SPY','QQQ','IWM','GLD','TLT','SOXX','XLK','XLF','XLE','XLV',
 
     # ── TH Banking ───────────────────────────────────────────────
     'KBANK.BK','SCB.BK','BBL.BK','KTB.BK','TTB.BK','BAY.BK','TISCO.BK',
@@ -67,7 +85,26 @@ def tv_url(ticker):
     sym = ("SET:"+ticker.replace(".BK","")) if ticker.endswith(".BK") else ticker
     return f"https://www.tradingview.com/chart/?symbol={sym}&interval=60&studies=STD%3BEMA%4020%2C%2050%2C%20200"
 
-def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency):
+def analyze_with_claude(ticker, sig, price, rsi, tp, sl):
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001", max_tokens=200,
+            messages=[{"role":"user","content":
+                f"วิเคราะห์ intraday (1H) หุ้น {ticker} สัญญาณ {sig} "
+                f"ราคา {price:.2f} RSI {rsi:.1f} TP:{tp:.2f} SL:{sl:.2f}\n"
+                f"ภาษาไทย 2 บรรทัด แล้วให้คะแนน Conviction: X/5"}])
+        return msg.content[0].text
+    except Exception as e:
+        print(f"[CLAUDE] {ticker}: {e}"); return None
+
+def get_conviction(txt):
+    try:
+        m = re.search(r'Conviction:\s*(\d)', txt or "")
+        return int(m.group(1)) if m else 3
+    except: return 3
+
+def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency, conviction, ai_text):
     is_buy  = sig == "BUY"
     bc      = "#00C851" if is_buy else "#FF4444"
     bt      = "🟢 INTRADAY BUY" if is_buy else "🔴 INTRADAY SELL"
@@ -76,6 +113,8 @@ def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency
     rsi_bar = "█"*int(rsi/10) + "░"*(10-int(rsi/10))
     rr      = abs(tp - price) / abs(price - sl) if abs(price - sl) > 0 else 0
     src_tag = "📍 Swing" if tp_src == "swing" else "📐 ATR"
+    stars   = "⭐"*conviction + "☆"*(5-conviction)
+    str_t   = "STRONG 💪" if conviction >= 4 else ("MODERATE 👍" if conviction == 3 else "WEAK 👀")
 
     body = [
         {"type":"box","layout":"horizontal","contents":[
@@ -89,7 +128,17 @@ def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency
         _kv("🎯 TP", f"{currency}{tp:,.2f}  {src_tag}"),
         _kv("🛡 SL", f"{currency}{sl:,.2f}  {src_tag}"),
         _kv("📏 R:R", f"1 : {rr:.1f}"),
+        _sep(),
+        {"type":"box","layout":"horizontal","contents":[
+            {"type":"text","text":"🤖 AI","color":"#B0BEC5","size":"xs","flex":0},
+            {"type":"text","text":f"  {stars}  {str_t}","color":"#FFD54F","size":"xs","flex":1,"wrap":True},
+        ]},
     ]
+    if ai_text:
+        lines = [l.strip() for l in ai_text.strip().split("\n") if l.strip() and "Conviction" not in l][:2]
+        if lines:
+            body.append({"type":"text","text":"\n".join(lines),
+                         "color":"#CFD8DC","size":"xs","wrap":True,"margin":"xs"})
 
     return {
         "type":"flex","altText":f"{bt} {ticker} @ {currency}{price:.2f}",
@@ -132,9 +181,8 @@ def find_swing_tp_sl(sig, price, atr, df, window=5):
         tp = max(tp_cands) if tp_cands else price - 2*atr
 
     used_swing = bool(sl_cands and tp_cands)
-    # sanity check: R:R ≥ 1 and SL/TP on correct side
     rr = abs(tp - price) / abs(price - sl) if abs(price - sl) > 0 else 0
-    if rr < 1 or (sig == "BUY" and (tp <= price or sl >= price)) or \
+    if rr < 1 or (sig == "BUY"  and (tp <= price or sl >= price)) or \
                  (sig == "SELL" and (tp >= price or sl <= price)):
         sl = price - atr if sig == "BUY" else price + atr
         tp = price + 2*atr if sig == "BUY" else price - 2*atr
@@ -183,8 +231,10 @@ def main():
     now = datetime.now(TZ_THAI)
     print(f"[INTRADAY] {now.strftime('%Y-%m-%d %H:%M')}")
 
-    signals = []
-    errors  = 0
+    signals  = []
+    errors   = 0
+    filtered = 0
+
     for ticker in INTRADAY_STOCKS:
         try:
             res = check_intraday(ticker)
@@ -193,17 +243,26 @@ def main():
             errors += 1
             continue
         if not res: continue
+
         sig, price, rsi, tp, sl, tp_src, reason = res
+
+        ai_text  = analyze_with_claude(ticker, sig, price, rsi, tp, sl)
+        conv     = get_conviction(ai_text)
+        print(f"[SIGNAL] {ticker} {sig} RSI:{rsi:.1f} conv:{conv}/5 src:{tp_src}")
+
+        if conv < 3:
+            filtered += 1
+            continue
+
         is_thai  = ticker.endswith(".BK")
         currency = "฿" if is_thai else "$"
         display  = ticker.replace(".BK","") if is_thai else ticker
-        card     = flex_intraday_card(display, sig, price, rsi, tp, sl, tp_src, reason, currency)
+        card     = flex_intraday_card(display, sig, price, rsi, tp, sl, tp_src, reason, currency, conv, ai_text)
         signals.append(card)
-        print(f"[SIGNAL] {ticker} {sig} RSI:{rsi:.1f} TP:{tp:.2f} SL:{sl:.2f} src:{tp_src}")
-        time.sleep(0.1)
+        time.sleep(0.2)
 
     total = len(INTRADAY_STOCKS)
-    print(f"[DONE] สแกน {total} | สัญญาณ {len(signals)} | error {errors}")
+    print(f"[DONE] สแกน {total} | สัญญาณ {len(signals)} | filtered {filtered} | error {errors}")
 
     if errors > total // 2:
         push_flex({
