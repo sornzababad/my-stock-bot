@@ -355,16 +355,20 @@ def send_market(sigs, flag, market, idx_name, idx_price, idx_chg,
         push_messages([flex_no_signal(flag,market,idx_name,idx_price,idx_chg,scan_n,scan_s)])
         return
 
-    msgs = [flex_header(flag,market,idx_name,idx_price,idx_chg,
-                        scan_n,scan_s,buy_n,watch_n,exit_n,ai_fil,
-                        mkt_summary(idx_chg))]
-    for _, _, (card, ticker) in sigs:
-        msgs.append(card)
-        img = image_msg(ticker)
-        if img:
-            msgs.append(img)
+    header = flex_header(flag,market,idx_name,idx_price,idx_chg,
+                         scan_n,scan_s,buy_n,watch_n,exit_n,ai_fil,
+                         mkt_summary(idx_chg))
 
-    push_messages(msgs)
+    bubbles = [header['contents']]
+    for _, _, (card, _) in sigs:
+        bubbles.append(card['contents'])
+
+    carousel = {
+        "type": "flex",
+        "altText": header.get('altText', f"{flag} {market} Alert"),
+        "contents": {"type": "carousel", "contents": bubbles[:12]}
+    }
+    push_messages([carousel])
 
 # ── MAIN ─────────────────────────────────────────────────────────
 
