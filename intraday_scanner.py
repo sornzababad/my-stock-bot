@@ -117,52 +117,89 @@ def parse_analysis(txt):
 
 def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency, conviction, info):
     is_buy = sig == "BUY"
-    bc     = "#00C851" if is_buy else "#FF4444"
-    bt     = "🟢 BUY" if is_buy else "🔴 SELL"
-    hbg    = "#0D3321" if is_buy else "#3E0A0A"
+    bc     = "#00E676" if is_buy else "#FF5252"
+    hbg    = "#0A1F14" if is_buy else "#1F0A0A"
     now    = datetime.now(TZ_THAI).strftime("%H:%M")
     rr     = abs(tp - price) / abs(price - sl) if abs(price - sl) > 0 else 0
-    stars  = "⭐"*conviction + "☆"*(5-conviction)
-    sym    = ticker.replace(".BK","")
+    stars  = "⭐" * conviction + "☆" * (5 - conviction)
+    sym    = ticker.replace(".BK", "")
+    badge  = "  BUY  " if is_buy else "  SELL  "
 
     name_line = info.get("name") or sym
-    biz_line  = info.get("business","")
-    reason_ai = info.get("reason","")
-
-    body = [
-        {"type":"box","layout":"horizontal","contents":[
-            {"type":"text","text":sym,"weight":"bold","size":"xl","color":"#FFFFFF","flex":1},
-            {"type":"text","text":f"{currency}{price:,.2f}","weight":"bold","size":"lg","color":bc,"align":"end"},
-        ]},
-        {"type":"text","text":name_line,"color":"#90CAF9","size":"xs","margin":"xs"},
-    ]
-    if biz_line:
-        body.append({"type":"text","text":f"🏢 {biz_line}","color":"#B0BEC5","size":"xs","wrap":True})
-    body += [
-        _sep(),
-        {"type":"text","text":reason,"color":"#CFD8DC","size":"xs","wrap":True},
-    ]
-    if reason_ai:
-        body.append({"type":"text","text":f"🤖 {reason_ai}","color":"#FFD54F","size":"xs","wrap":True,"margin":"xs"})
-    body += [
-        _sep(),
-        _kv("🎯 TP", f"{currency}{tp:,.2f}"),
-        _kv("🛡 SL", f"{currency}{sl:,.2f}"),
-        _kv("📏 R:R", f"1:{rr:.1f}   {stars}"),
-    ]
+    biz_line  = info.get("business", "")
+    reason_ai = info.get("reason", "")
 
     return {
-        "type":"flex","altText":f"{bt} {sym} @ {currency}{price:.2f}  {stars}",
-        "contents":{"type":"bubble","size":"kilo",
-            "header":{"type":"box","layout":"horizontal","backgroundColor":hbg,"paddingAll":"12px","contents":[
-                {"type":"text","text":bt,"weight":"bold","size":"sm","color":bc,"flex":1},
-                {"type":"text","text":f"⏰ {now}","size":"xs","color":"#90CAF9","align":"end"},
-            ]},
-            "body":{"type":"box","layout":"vertical","backgroundColor":"#1E2A3A","paddingAll":"14px","spacing":"xs","contents":body},
-            "footer":{"type":"box","layout":"vertical","backgroundColor":"#263238","paddingAll":"8px","contents":[
-                {"type":"button","action":{"type":"uri","label":"📊 ดูกราฟ","uri":tv_url(ticker)},
-                 "style":"primary","color":bc,"height":"sm"}
-            ]}
+        "type": "flex",
+        "altText": f"{'🟢 BUY' if is_buy else '🔴 SELL'} {sym} @ {currency}{price:.2f}  {stars}",
+        "contents": {
+            "type": "bubble", "size": "kilo",
+            "header": {
+                "type": "box", "layout": "vertical",
+                "backgroundColor": hbg, "paddingAll": "16px", "spacing": "xs",
+                "contents": [
+                    {"type": "box", "layout": "horizontal", "contents": [
+                        {"type": "text", "text": sym, "weight": "bold", "size": "xxl",
+                         "color": "#FFFFFF", "flex": 1},
+                        {"type": "box", "layout": "vertical", "backgroundColor": bc,
+                         "cornerRadius": "20px", "paddingStart": "10px", "paddingEnd": "10px",
+                         "paddingTop": "4px", "paddingBottom": "4px", "justifyContent": "center",
+                         "contents": [
+                             {"type": "text", "text": badge, "weight": "bold",
+                              "size": "xs", "color": "#000000", "align": "center"}
+                         ]},
+                    ]},
+                    {"type": "text", "text": f"{currency}{price:,.2f}",
+                     "weight": "bold", "size": "xl", "color": bc},
+                    {"type": "text", "text": name_line, "size": "xs",
+                     "color": "#78909C", "margin": "xs"},
+                ]
+            },
+            "body": {
+                "type": "box", "layout": "vertical",
+                "backgroundColor": "#151F2E", "paddingAll": "14px", "spacing": "sm",
+                "contents": [
+                    *([ {"type": "text", "text": f"🏢  {biz_line}",
+                          "color": "#B0BEC5", "size": "xs", "wrap": True} ] if biz_line else []),
+                    {"type": "separator", "color": "#263545", "margin": "sm"},
+                    {"type": "text", "text": reason, "color": "#CFD8DC",
+                     "size": "xs", "wrap": True},
+                    *([ {"type": "text", "text": f"🤖  {reason_ai}", "color": "#FFD54F",
+                          "size": "xs", "wrap": True} ] if reason_ai else []),
+                    {"type": "separator", "color": "#263545", "margin": "sm"},
+                    {"type": "box", "layout": "vertical", "backgroundColor": "#1E2D1E",
+                     "cornerRadius": "10px", "paddingAll": "10px", "spacing": "xs",
+                     "contents": [
+                         {"type": "box", "layout": "horizontal", "contents": [
+                             {"type": "text", "text": "🎯  TP",
+                              "color": "#69F0AE", "size": "xs", "weight": "bold", "flex": 1},
+                             {"type": "text", "text": f"{currency}{tp:,.2f}",
+                              "color": "#69F0AE", "size": "sm", "weight": "bold", "align": "end"},
+                         ]},
+                         {"type": "box", "layout": "horizontal", "contents": [
+                             {"type": "text", "text": "🛡  SL",
+                              "color": "#FF8A80", "size": "xs", "weight": "bold", "flex": 1},
+                             {"type": "text", "text": f"{currency}{sl:,.2f}",
+                              "color": "#FF8A80", "size": "sm", "weight": "bold", "align": "end"},
+                         ]},
+                     ]},
+                    {"type": "box", "layout": "horizontal", "margin": "xs", "contents": [
+                        {"type": "text", "text": f"📏  R:R  1:{rr:.1f}",
+                         "color": "#90CAF9", "size": "xs", "flex": 1},
+                        {"type": "text", "text": stars,
+                         "size": "xs", "align": "end"},
+                    ]},
+                ]
+            },
+            "footer": {
+                "type": "box", "layout": "vertical",
+                "backgroundColor": "#0D1520", "paddingAll": "10px",
+                "contents": [
+                    {"type": "button",
+                     "action": {"type": "uri", "label": "📊 ดูกราฟ 1H", "uri": tv_url(ticker)},
+                     "style": "primary", "color": bc, "height": "sm"}
+                ]
+            }
         }
     }
 
