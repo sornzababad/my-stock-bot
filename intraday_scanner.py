@@ -116,7 +116,6 @@ def parse_analysis(txt):
         "weakness": extract("จุดอ่อน"),
         "analysis": extract("วิเคราะห์"),
     }, conv
-    except: return 3
 
 def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency, conviction, info):
     is_buy  = sig == "BUY"
