@@ -30,10 +30,15 @@ NEWS_STOCKS = {
 
 def push_flex(obj):
     uids = load_users()
-    if not uids: return
-    requests.post('https://api.line.me/v2/bot/message/multicast',
-                  headers={'Content-Type':'application/json','Authorization':f'Bearer {LINE_TOKEN}'},
-                  json={'to':uids,'messages':[obj]}, timeout=10)
+    print(f"[PUSH] token={'OK' if LINE_TOKEN else 'MISSING'} | users={uids}")
+    if not LINE_TOKEN:
+        print("[PUSH] ERROR: CHANNEL_ACCESS_TOKEN not set"); return
+    if not uids:
+        print("[PUSH] ERROR: no users — set USER_ID or USER_IDS secret"); return
+    r = requests.post('https://api.line.me/v2/bot/message/multicast',
+                      headers={'Content-Type':'application/json','Authorization':f'Bearer {LINE_TOKEN}'},
+                      json={'to':uids,'messages':[obj]}, timeout=10)
+    print(f"[PUSH] {r.status_code} {r.text[:200]}")
 
 def _sep():   return {"type":"separator","color":"#37474F","margin":"sm"}
 def _kv(l,v): return {"type":"box","layout":"horizontal","margin":"xs","contents":[
