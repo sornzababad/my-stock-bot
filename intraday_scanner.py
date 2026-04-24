@@ -287,13 +287,13 @@ def check_intraday(ticker):
     rsi   = float(last['RSI']) if not pd.isna(last['RSI']) else 50
 
     sig = None
-    if rsi <= 25:
-        sig, reason = "BUY",  f"RSI ต่ำมาก {rsi:.1f} — Oversold รุนแรง 🔻"
-    elif rsi >= 75:
-        sig, reason = "SELL", f"RSI สูงมาก {rsi:.1f} — Overbought รุนแรง 🔺"
-    elif price > float(last['BB_U'])*1.005:
+    if rsi <= 30:
+        sig, reason = "BUY",  f"RSI ต่ำ {rsi:.1f} — Oversold 🔻"
+    elif rsi >= 70:
+        sig, reason = "SELL", f"RSI สูง {rsi:.1f} — Overbought 🔺"
+    elif price > float(last['BB_U']):
         sig, reason = "SELL", f"ราคาทะลุ Upper BB — Breakout 🔺"
-    elif price < float(last['BB_L'])*0.995:
+    elif price < float(last['BB_L']):
         sig, reason = "BUY",  f"ราคาหลุด Lower BB — Oversold Squeeze 🔻"
 
     if sig is None:
@@ -355,15 +355,30 @@ def main():
         })
         return
 
+    now_str = datetime.now(TZ_THAI).strftime("%d %b %Y  %H:%M")
     if signals:
         bubbles = [card['contents'] for card in signals]
-        now_str = datetime.now(TZ_THAI).strftime("%d %b %Y  %H:%M")
         carousel = {
             "type": "flex",
             "altText": f"⏰ Intraday Alert — {len(signals)} สัญญาณ  {now_str}",
             "contents": {"type": "carousel", "contents": bubbles[:12]}
         }
         push_flex(carousel)
+    else:
+        push_flex({
+            "type": "flex", "altText": f"😴 Intraday — ไม่พบสัญญาณ  {now_str}",
+            "contents": {"type": "bubble", "size": "kilo",
+                "body": {"type": "box", "layout": "vertical", "backgroundColor": "#0E1621",
+                    "paddingAll": "20px", "spacing": "sm", "contents": [
+                        {"type": "text", "text": "😴 ไม่พบสัญญาณ", "weight": "bold",
+                         "color": "#90CAF9", "size": "lg"},
+                        {"type": "text", "text": now_str, "color": "#546E7A", "size": "xs"},
+                        {"type": "separator", "color": "#1E2D3D", "margin": "sm"},
+                        {"type": "text",
+                         "text": f"สแกน {total} หุ้น ไม่มีตัวไหนผ่าน RSI/BB filter ในชั่วโมงนี้",
+                         "color": "#CFD8DC", "size": "xs", "wrap": True},
+                    ]}}
+        })
 
 if __name__ == "__main__":
     main()
