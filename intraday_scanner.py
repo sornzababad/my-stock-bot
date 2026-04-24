@@ -135,8 +135,6 @@ def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency
     biz_line  = (info.get("business") or "")[:50]
     reason_ai = (info.get("reason") or "")[:60]
 
-    dime_url  = f"dime://stock/{sym}"
-
     return {
         "type": "flex",
         "altText": f"{'🟢' if is_buy else '🔴'} {badge} {sym} {currency}{price:.2f}  R:R 1:{rr:.1f}  {stars}",
@@ -221,15 +219,12 @@ def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency
                 ]
             },
             "footer": {
-                "type": "box", "layout": "horizontal",
-                "backgroundColor": "#070F18", "paddingAll": "10px", "spacing": "sm",
+                "type": "box", "layout": "vertical",
+                "backgroundColor": "#070F18", "paddingAll": "10px",
                 "contents": [
                     {"type": "button",
-                     "action": {"type": "uri", "label": "💹 Dime", "uri": dime_url},
-                     "style": "primary", "color": bc, "height": "sm", "flex": 1},
-                    {"type": "button",
-                     "action": {"type": "uri", "label": "📊 Chart", "uri": tv_url(ticker)},
-                     "style": "secondary", "height": "sm", "flex": 1},
+                     "action": {"type": "uri", "label": "📊 ดูกราฟ 1H", "uri": tv_url(ticker)},
+                     "style": "primary", "color": bc, "height": "sm"},
                 ]
             }
         }
