@@ -89,14 +89,13 @@ def analyze_with_claude(ticker, sig, price, rsi, tp, sl):
     try:
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         msg = client.messages.create(
-            model="claude-haiku-4-5-20251001", max_tokens=400,
+            model="claude-haiku-4-5-20251001", max_tokens=180,
             messages=[{"role":"user","content":
-                f"หุ้น {ticker} สัญญาณ {sig} (1H) ราคา {price:.2f} RSI {rsi:.1f} TP:{tp:.2f} SL:{sl:.2f}\n\n"
-                f"ตอบภาษาไทยตามรูปแบบนี้:\n"
-                f"[ธุรกิจ] อธิบาย 1 ประโยคว่าบริษัทนี้ทำอะไร\n"
-                f"[จุดแข็ง] 1-2 ข้อสั้นๆ\n"
-                f"[จุดอ่อน] 1-2 ข้อสั้นๆ\n"
-                f"[วิเคราะห์] ความเห็นต่อสัญญาณนี้ 1 ประโยค\n"
+                f"หุ้น {ticker} สัญญาณ {sig} ราคา {price:.2f} TP:{tp:.2f} SL:{sl:.2f}\n"
+                f"ตอบภาษาไทย:\n"
+                f"[ชื่อ] ชื่อเต็มบริษัท\n"
+                f"[ธุรกิจ] ทำอะไร ใน 8 คำหรือน้อยกว่า\n"
+                f"[เหตุผล] ทำไมควร{sig} ใน 1 ประโยคสั้น\n"
                 f"[Conviction] X/5"}])
         return msg.content[0].text
     except Exception as e:
@@ -104,71 +103,64 @@ def analyze_with_claude(ticker, sig, price, rsi, tp, sl):
 
 def parse_analysis(txt):
     if not txt:
-        return {"business":"","strength":"","weakness":"","analysis":""}, 3
+        return {"name":"","business":"","reason":""}, 3
     def extract(tag):
         m = re.search(rf'\[{tag}\]\s*(.+?)(?=\[|$)', txt, re.DOTALL)
         return m.group(1).strip() if m else ""
     conv_m = re.search(r'\[Conviction\]\s*(\d)', txt)
     conv   = int(conv_m.group(1)) if conv_m else 3
     return {
+        "name":     extract("ชื่อ"),
         "business": extract("ธุรกิจ"),
-        "strength": extract("จุดแข็ง"),
-        "weakness": extract("จุดอ่อน"),
-        "analysis": extract("วิเคราะห์"),
+        "reason":   extract("เหตุผล"),
     }, conv
 
 def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency, conviction, info):
-    is_buy  = sig == "BUY"
-    bc      = "#00C851" if is_buy else "#FF4444"
-    bt      = "🟢 INTRADAY BUY" if is_buy else "🔴 INTRADAY SELL"
-    hbg     = "#0D3321" if is_buy else "#3E0A0A"
-    now     = datetime.now(TZ_THAI).strftime("%H:%M")
-    rsi_bar = "█"*int(rsi/10) + "░"*(10-int(rsi/10))
-    rr      = abs(tp - price) / abs(price - sl) if abs(price - sl) > 0 else 0
-    src_tag = "📍 Swing" if tp_src == "swing" else "📐 ATR"
-    stars   = "⭐"*conviction + "☆"*(5-conviction)
-    str_t   = "STRONG 💪" if conviction >= 4 else ("MODERATE 👍" if conviction == 3 else "WEAK 👀")
+    is_buy = sig == "BUY"
+    bc     = "#00C851" if is_buy else "#FF4444"
+    bt     = "🟢 BUY" if is_buy else "🔴 SELL"
+    hbg    = "#0D3321" if is_buy else "#3E0A0A"
+    now    = datetime.now(TZ_THAI).strftime("%H:%M")
+    rr     = abs(tp - price) / abs(price - sl) if abs(price - sl) > 0 else 0
+    stars  = "⭐"*conviction + "☆"*(5-conviction)
+    sym    = ticker.replace(".BK","")
+
+    name_line = info.get("name") or sym
+    biz_line  = info.get("business","")
+    reason_ai = info.get("reason","")
 
     body = [
         {"type":"box","layout":"horizontal","contents":[
-            {"type":"text","text":ticker.replace(".BK",""),"weight":"bold","size":"xl","color":"#FFFFFF","flex":1},
+            {"type":"text","text":sym,"weight":"bold","size":"xl","color":"#FFFFFF","flex":1},
             {"type":"text","text":f"{currency}{price:,.2f}","weight":"bold","size":"lg","color":bc,"align":"end"},
         ]},
-        {"type":"text","text":reason,"color":"#90CAF9","size":"sm","margin":"xs"},
+        {"type":"text","text":name_line,"color":"#90CAF9","size":"xs","margin":"xs"},
     ]
-    if info.get("business"):
-        body += [_sep(),
-                 {"type":"text","text":f"🏢 {info['business']}","color":"#CFD8DC","size":"xs","wrap":True}]
-    if info.get("strength"):
-        body.append({"type":"text","text":f"✅ {info['strength']}","color":"#A5D6A7","size":"xs","wrap":True,"margin":"xs"})
-    if info.get("weakness"):
-        body.append({"type":"text","text":f"⚠️ {info['weakness']}","color":"#EF9A9A","size":"xs","wrap":True,"margin":"xs"})
+    if biz_line:
+        body.append({"type":"text","text":f"🏢 {biz_line}","color":"#B0BEC5","size":"xs","wrap":True})
     body += [
         _sep(),
-        _kv("📊 RSI", f"[{rsi_bar}]  {rsi:.1f}"),
-        _sep(),
-        _kv("🎯 TP", f"{currency}{tp:,.2f}  {src_tag}"),
-        _kv("🛡 SL", f"{currency}{sl:,.2f}  {src_tag}"),
-        _kv("📏 R:R", f"1 : {rr:.1f}"),
-        _sep(),
-        {"type":"box","layout":"horizontal","contents":[
-            {"type":"text","text":"🤖 AI","color":"#B0BEC5","size":"xs","flex":0},
-            {"type":"text","text":f"  {stars}  {str_t}","color":"#FFD54F","size":"xs","flex":1,"wrap":True},
-        ]},
+        {"type":"text","text":reason,"color":"#CFD8DC","size":"xs","wrap":True},
     ]
-    if info.get("analysis"):
-        body.append({"type":"text","text":info["analysis"],"color":"#CFD8DC","size":"xs","wrap":True,"margin":"xs"})
+    if reason_ai:
+        body.append({"type":"text","text":f"🤖 {reason_ai}","color":"#FFD54F","size":"xs","wrap":True,"margin":"xs"})
+    body += [
+        _sep(),
+        _kv("🎯 TP", f"{currency}{tp:,.2f}"),
+        _kv("🛡 SL", f"{currency}{sl:,.2f}"),
+        _kv("📏 R:R", f"1:{rr:.1f}   {stars}"),
+    ]
 
     return {
-        "type":"flex","altText":f"{bt} {ticker} @ {currency}{price:.2f}",
+        "type":"flex","altText":f"{bt} {sym} @ {currency}{price:.2f}  {stars}",
         "contents":{"type":"bubble","size":"kilo",
-            "header":{"type":"box","layout":"vertical","backgroundColor":hbg,"paddingAll":"12px","contents":[
-                {"type":"text","text":bt,"weight":"bold","size":"sm","color":bc},
-                {"type":"text","text":f"⏰ Intraday  {now}","size":"xs","color":"#90CAF9","margin":"xs"},
+            "header":{"type":"box","layout":"horizontal","backgroundColor":hbg,"paddingAll":"12px","contents":[
+                {"type":"text","text":bt,"weight":"bold","size":"sm","color":bc,"flex":1},
+                {"type":"text","text":f"⏰ {now}","size":"xs","color":"#90CAF9","align":"end"},
             ]},
             "body":{"type":"box","layout":"vertical","backgroundColor":"#1E2A3A","paddingAll":"14px","spacing":"xs","contents":body},
-            "footer":{"type":"box","layout":"vertical","backgroundColor":"#263238","paddingAll":"10px","contents":[
-                {"type":"button","action":{"type":"uri","label":"📊 ดูกราฟ 1H + EMA","uri":tv_url(ticker)},
+            "footer":{"type":"box","layout":"vertical","backgroundColor":"#263238","paddingAll":"8px","contents":[
+                {"type":"button","action":{"type":"uri","label":"📊 ดูกราฟ","uri":tv_url(ticker)},
                  "style":"primary","color":bc,"height":"sm"}
             ]}
         }
