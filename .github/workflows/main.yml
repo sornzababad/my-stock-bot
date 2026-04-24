@@ -10,6 +10,10 @@ on:
     - cron: '0 2-10 * * 1-5'  # 🇹🇭 SET hours  09:00-17:00 ICT
     - cron: '0 14-21 * * 1-5' # 🇺🇸 US  hours  21:00-04:00 ICT
 
+    # ── Pre-market news ───────────────────────────────────────────
+    - cron: '30 1 * * 1-5'   # 🇹🇭 SET pre-market  08:30 ICT
+    - cron: '30 13 * * 1-5'  # 🇺🇸 US  pre-market  20:30 ICT
+
     # ── Weekly summary (Friday 17:30 ICT) ─────────────────────────
     - cron: '30 10 * * 5'
 
@@ -20,7 +24,7 @@ on:
         required: true
         default: 'daily'
         type: choice
-        options: [daily, intraday, weekly]
+        options: [daily, intraday, weekly, premarket]
       market:
         description: 'Market (for daily)'
         required: false
@@ -63,19 +67,26 @@ jobs:
           JOB="${{ github.event.inputs.job }}"
           MARKET="${{ github.event.inputs.market || 'both' }}"
 
+          MIN=$(date -u +%M)
           if [ "$EVENT" = "workflow_dispatch" ]; then
             echo "script=$JOB" >> $GITHUB_OUTPUT
             echo "market=$MARKET" >> $GITHUB_OUTPUT
-          elif [ "$HOUR" = "10" ] && [ "$(date -u +%M)" = "30" ]; then
-            echo "script=weekly"   >> $GITHUB_OUTPUT
+          elif [ "$HOUR" = "10" ] && [ "$MIN" = "30" ]; then
+            echo "script=weekly"    >> $GITHUB_OUTPUT
+          elif [ "$HOUR" = "01" ] && [ "$MIN" = "30" ]; then
+            echo "script=premarket" >> $GITHUB_OUTPUT
+            echo "market=thai"      >> $GITHUB_OUTPUT
+          elif [ "$HOUR" = "13" ] && [ "$MIN" = "30" ]; then
+            echo "script=premarket" >> $GITHUB_OUTPUT
+            echo "market=us"        >> $GITHUB_OUTPUT
           elif [ "$HOUR" = "10" ]; then
-            echo "script=daily"    >> $GITHUB_OUTPUT
-            echo "market=thai"     >> $GITHUB_OUTPUT
+            echo "script=daily"     >> $GITHUB_OUTPUT
+            echo "market=thai"      >> $GITHUB_OUTPUT
           elif [ "$HOUR" = "21" ]; then
-            echo "script=daily"    >> $GITHUB_OUTPUT
-            echo "market=us"       >> $GITHUB_OUTPUT
+            echo "script=daily"     >> $GITHUB_OUTPUT
+            echo "market=us"        >> $GITHUB_OUTPUT
           else
-            echo "script=intraday" >> $GITHUB_OUTPUT
+            echo "script=intraday"  >> $GITHUB_OUTPUT
           fi
 
       - name: Run daily scanner
@@ -94,6 +105,14 @@ jobs:
           USER_ID:               ${{ secrets.LINE_USER_ID }}
           ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
         run: python intraday_scanner.py
+
+      - name: Run pre-market news
+        if: steps.decide.outputs.script == 'premarket'
+        env:
+          CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_ACCESS_TOKEN }}
+          USER_ID:               ${{ secrets.LINE_USER_ID }}
+          ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python premarket_news.py "${{ steps.decide.outputs.market || 'both' }}"
 
       - name: Run weekly summary
         if: steps.decide.outputs.script == 'weekly'
