@@ -118,86 +118,113 @@ def parse_analysis(txt):
 def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency, conviction, info):
     is_buy = sig == "BUY"
     bc     = "#00E676" if is_buy else "#FF5252"
-    hbg    = "#0A1F14" if is_buy else "#1F0A0A"
-    now    = datetime.now(TZ_THAI).strftime("%H:%M")
+    hbg    = "#071912" if is_buy else "#180707"
+    badge  = "▲ BUY" if is_buy else "▼ SELL"
     rr     = abs(tp - price) / abs(price - sl) if abs(price - sl) > 0 else 0
     stars  = "⭐" * conviction + "☆" * (5 - conviction)
     sym    = ticker.replace(".BK", "")
-    badge  = "  BUY  " if is_buy else "  SELL  "
+    pct_tp = ((tp - price) / price * 100)
+    pct_sl = ((sl - price) / price * 100)
 
     name_line = info.get("name") or sym
-    biz_line  = info.get("business", "")
-    reason_ai = info.get("reason", "")
+    biz_line  = (info.get("business") or "")[:50]
+    reason_ai = (info.get("reason") or "")[:60]
+
+    dime_url  = f"dime://stock/{sym}"
 
     return {
         "type": "flex",
-        "altText": f"{'🟢 BUY' if is_buy else '🔴 SELL'} {sym} @ {currency}{price:.2f}  {stars}",
+        "altText": f"{'🟢' if is_buy else '🔴'} {badge} {sym} {currency}{price:.2f}  R:R 1:{rr:.1f}  {stars}",
         "contents": {
             "type": "bubble", "size": "kilo",
             "header": {
                 "type": "box", "layout": "vertical",
-                "backgroundColor": hbg, "paddingAll": "16px", "spacing": "xs",
+                "backgroundColor": hbg, "paddingAll": "14px", "spacing": "none",
                 "contents": [
+                    # Row 1: ticker left, badge pill right
                     {"type": "box", "layout": "horizontal", "contents": [
-                        {"type": "text", "text": sym, "weight": "bold", "size": "xxl",
-                         "color": "#FFFFFF", "flex": 1},
-                        {"type": "box", "layout": "vertical", "backgroundColor": bc,
-                         "cornerRadius": "20px", "paddingStart": "10px", "paddingEnd": "10px",
-                         "paddingTop": "4px", "paddingBottom": "4px", "justifyContent": "center",
-                         "contents": [
-                             {"type": "text", "text": badge, "weight": "bold",
-                              "size": "xs", "color": "#000000", "align": "center"}
-                         ]},
+                        {"type": "text", "text": sym, "weight": "bold",
+                         "size": "xxl", "color": "#FFFFFF", "flex": 1},
+                        {"type": "box", "layout": "vertical",
+                         "backgroundColor": bc, "cornerRadius": "6px",
+                         "paddingStart": "10px", "paddingEnd": "10px",
+                         "paddingTop": "3px", "paddingBottom": "3px",
+                         "justifyContent": "center",
+                         "contents": [{"type": "text", "text": badge,
+                                       "weight": "bold", "size": "sm",
+                                       "color": "#000000"}]},
                     ]},
-                    {"type": "text", "text": f"{currency}{price:,.2f}",
-                     "weight": "bold", "size": "xl", "color": bc},
-                    {"type": "text", "text": name_line, "size": "xs",
-                     "color": "#78909C", "margin": "xs"},
+                    # Row 2: price + company name
+                    {"type": "box", "layout": "horizontal",
+                     "margin": "xs", "contents": [
+                        {"type": "text", "text": f"{currency}{price:,.2f}",
+                         "weight": "bold", "size": "lg", "color": bc, "flex": 1},
+                        {"type": "text", "text": name_line, "size": "xxs",
+                         "color": "#546E7A", "align": "end", "flex": 2, "wrap": True},
+                    ]},
+                    # Row 3: what they do
+                    *([{"type": "text", "text": f"🏢  {biz_line}", "size": "xxs",
+                        "color": "#607D8B", "wrap": True, "margin": "xs"}] if biz_line else []),
                 ]
             },
             "body": {
                 "type": "box", "layout": "vertical",
-                "backgroundColor": "#151F2E", "paddingAll": "14px", "spacing": "sm",
+                "backgroundColor": "#0E1621", "paddingAll": "12px", "spacing": "sm",
                 "contents": [
-                    *([ {"type": "text", "text": f"🏢  {biz_line}",
-                          "color": "#B0BEC5", "size": "xs", "wrap": True} ] if biz_line else []),
-                    {"type": "separator", "color": "#263545", "margin": "sm"},
+                    # Signal reason
                     {"type": "text", "text": reason, "color": "#CFD8DC",
                      "size": "xs", "wrap": True},
-                    *([ {"type": "text", "text": f"🤖  {reason_ai}", "color": "#FFD54F",
-                          "size": "xs", "wrap": True} ] if reason_ai else []),
-                    {"type": "separator", "color": "#263545", "margin": "sm"},
-                    {"type": "box", "layout": "vertical", "backgroundColor": "#1E2D1E",
-                     "cornerRadius": "10px", "paddingAll": "10px", "spacing": "xs",
-                     "contents": [
-                         {"type": "box", "layout": "horizontal", "contents": [
-                             {"type": "text", "text": "🎯  TP",
-                              "color": "#69F0AE", "size": "xs", "weight": "bold", "flex": 1},
+                    # AI take
+                    *([{"type": "text", "text": f"🤖  {reason_ai}",
+                        "color": "#FFD54F", "size": "xs", "wrap": True}] if reason_ai else []),
+
+                    {"type": "separator", "color": "#1E2D3D", "margin": "sm"},
+
+                    # TP | SL side by side
+                    {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                        {"type": "box", "layout": "vertical",
+                         "backgroundColor": "#0D2016", "cornerRadius": "8px",
+                         "paddingAll": "8px", "flex": 1,
+                         "contents": [
+                             {"type": "text", "text": "🎯  TP", "size": "xxs",
+                              "color": "#69F0AE", "weight": "bold"},
                              {"type": "text", "text": f"{currency}{tp:,.2f}",
-                              "color": "#69F0AE", "size": "sm", "weight": "bold", "align": "end"},
+                              "size": "sm", "color": "#69F0AE", "weight": "bold"},
+                             {"type": "text", "text": f"{pct_tp:+.1f}%",
+                              "size": "xxs", "color": "#2E7D52"},
                          ]},
-                         {"type": "box", "layout": "horizontal", "contents": [
-                             {"type": "text", "text": "🛡  SL",
-                              "color": "#FF8A80", "size": "xs", "weight": "bold", "flex": 1},
+                        {"type": "box", "layout": "vertical",
+                         "backgroundColor": "#200D0D", "cornerRadius": "8px",
+                         "paddingAll": "8px", "flex": 1,
+                         "contents": [
+                             {"type": "text", "text": "🛡  SL", "size": "xxs",
+                              "color": "#FF8A80", "weight": "bold"},
                              {"type": "text", "text": f"{currency}{sl:,.2f}",
-                              "color": "#FF8A80", "size": "sm", "weight": "bold", "align": "end"},
+                              "size": "sm", "color": "#FF8A80", "weight": "bold"},
+                             {"type": "text", "text": f"{pct_sl:+.1f}%",
+                              "size": "xxs", "color": "#7D2E2E"},
                          ]},
-                     ]},
-                    {"type": "box", "layout": "horizontal", "margin": "xs", "contents": [
-                        {"type": "text", "text": f"📏  R:R  1:{rr:.1f}",
+                    ]},
+
+                    # R:R + stars
+                    {"type": "box", "layout": "horizontal",
+                     "margin": "xs", "contents": [
+                        {"type": "text", "text": f"📏  R:R  1 : {rr:.1f}",
                          "color": "#90CAF9", "size": "xs", "flex": 1},
-                        {"type": "text", "text": stars,
-                         "size": "xs", "align": "end"},
+                        {"type": "text", "text": stars, "size": "xs", "align": "end"},
                     ]},
                 ]
             },
             "footer": {
-                "type": "box", "layout": "vertical",
-                "backgroundColor": "#0D1520", "paddingAll": "10px",
+                "type": "box", "layout": "horizontal",
+                "backgroundColor": "#070F18", "paddingAll": "10px", "spacing": "sm",
                 "contents": [
                     {"type": "button",
-                     "action": {"type": "uri", "label": "📊 ดูกราฟ 1H", "uri": tv_url(ticker)},
-                     "style": "primary", "color": bc, "height": "sm"}
+                     "action": {"type": "uri", "label": "💹 Dime", "uri": dime_url},
+                     "style": "primary", "color": bc, "height": "sm", "flex": 1},
+                    {"type": "button",
+                     "action": {"type": "uri", "label": "📊 Chart", "uri": tv_url(ticker)},
+                     "style": "secondary", "height": "sm", "flex": 1},
                 ]
             }
         }
