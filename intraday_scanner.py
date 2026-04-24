@@ -89,22 +89,36 @@ def analyze_with_claude(ticker, sig, price, rsi, tp, sl):
     try:
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         msg = client.messages.create(
-            model="claude-haiku-4-5-20251001", max_tokens=200,
+            model="claude-haiku-4-5-20251001", max_tokens=400,
             messages=[{"role":"user","content":
-                f"วิเคราะห์ intraday (1H) หุ้น {ticker} สัญญาณ {sig} "
-                f"ราคา {price:.2f} RSI {rsi:.1f} TP:{tp:.2f} SL:{sl:.2f}\n"
-                f"ภาษาไทย 2 บรรทัด แล้วให้คะแนน Conviction: X/5"}])
+                f"หุ้น {ticker} สัญญาณ {sig} (1H) ราคา {price:.2f} RSI {rsi:.1f} TP:{tp:.2f} SL:{sl:.2f}\n\n"
+                f"ตอบภาษาไทยตามรูปแบบนี้:\n"
+                f"[ธุรกิจ] อธิบาย 1 ประโยคว่าบริษัทนี้ทำอะไร\n"
+                f"[จุดแข็ง] 1-2 ข้อสั้นๆ\n"
+                f"[จุดอ่อน] 1-2 ข้อสั้นๆ\n"
+                f"[วิเคราะห์] ความเห็นต่อสัญญาณนี้ 1 ประโยค\n"
+                f"[Conviction] X/5"}])
         return msg.content[0].text
     except Exception as e:
         print(f"[CLAUDE] {ticker}: {e}"); return None
 
-def get_conviction(txt):
-    try:
-        m = re.search(r'Conviction:\s*(\d)', txt or "")
-        return int(m.group(1)) if m else 3
+def parse_analysis(txt):
+    if not txt:
+        return {"business":"","strength":"","weakness":"","analysis":""}, 3
+    def extract(tag):
+        m = re.search(rf'\[{tag}\]\s*(.+?)(?=\[|$)', txt, re.DOTALL)
+        return m.group(1).strip() if m else ""
+    conv_m = re.search(r'\[Conviction\]\s*(\d)', txt)
+    conv   = int(conv_m.group(1)) if conv_m else 3
+    return {
+        "business": extract("ธุรกิจ"),
+        "strength": extract("จุดแข็ง"),
+        "weakness": extract("จุดอ่อน"),
+        "analysis": extract("วิเคราะห์"),
+    }, conv
     except: return 3
 
-def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency, conviction, ai_text):
+def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency, conviction, info):
     is_buy  = sig == "BUY"
     bc      = "#00C851" if is_buy else "#FF4444"
     bt      = "🟢 INTRADAY BUY" if is_buy else "🔴 INTRADAY SELL"
@@ -122,6 +136,15 @@ def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency
             {"type":"text","text":f"{currency}{price:,.2f}","weight":"bold","size":"lg","color":bc,"align":"end"},
         ]},
         {"type":"text","text":reason,"color":"#90CAF9","size":"sm","margin":"xs"},
+    ]
+    if info.get("business"):
+        body += [_sep(),
+                 {"type":"text","text":f"🏢 {info['business']}","color":"#CFD8DC","size":"xs","wrap":True}]
+    if info.get("strength"):
+        body.append({"type":"text","text":f"✅ {info['strength']}","color":"#A5D6A7","size":"xs","wrap":True,"margin":"xs"})
+    if info.get("weakness"):
+        body.append({"type":"text","text":f"⚠️ {info['weakness']}","color":"#EF9A9A","size":"xs","wrap":True,"margin":"xs"})
+    body += [
         _sep(),
         _kv("📊 RSI", f"[{rsi_bar}]  {rsi:.1f}"),
         _sep(),
@@ -134,11 +157,8 @@ def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency
             {"type":"text","text":f"  {stars}  {str_t}","color":"#FFD54F","size":"xs","flex":1,"wrap":True},
         ]},
     ]
-    if ai_text:
-        lines = [l.strip() for l in ai_text.strip().split("\n") if l.strip() and "Conviction" not in l][:2]
-        if lines:
-            body.append({"type":"text","text":"\n".join(lines),
-                         "color":"#CFD8DC","size":"xs","wrap":True,"margin":"xs"})
+    if info.get("analysis"):
+        body.append({"type":"text","text":info["analysis"],"color":"#CFD8DC","size":"xs","wrap":True,"margin":"xs"})
 
     return {
         "type":"flex","altText":f"{bt} {ticker} @ {currency}{price:.2f}",
@@ -246,8 +266,8 @@ def main():
 
         sig, price, rsi, tp, sl, tp_src, reason = res
 
-        ai_text  = analyze_with_claude(ticker, sig, price, rsi, tp, sl)
-        conv     = get_conviction(ai_text)
+        ai_text      = analyze_with_claude(ticker, sig, price, rsi, tp, sl)
+        info, conv   = parse_analysis(ai_text)
         print(f"[SIGNAL] {ticker} {sig} RSI:{rsi:.1f} conv:{conv}/5 src:{tp_src}")
 
         if conv < 3:
@@ -257,7 +277,7 @@ def main():
         is_thai  = ticker.endswith(".BK")
         currency = "฿" if is_thai else "$"
         display  = ticker.replace(".BK","") if is_thai else ticker
-        card     = flex_intraday_card(display, sig, price, rsi, tp, sl, tp_src, reason, currency, conv, ai_text)
+        card     = flex_intraday_card(display, sig, price, rsi, tp, sl, tp_src, reason, currency, conv, info)
         signals.append(card)
         time.sleep(0.2)
 
