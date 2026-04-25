@@ -111,7 +111,8 @@ def parse_analysis(txt):
         return {"name":"","business":"","reason":""}, 3
     def extract(tag):
         m = re.search(rf'\[{tag}\]\s*(.+?)(?=\[|$)', txt, re.DOTALL)
-        return m.group(1).strip() if m else ""
+        raw = m.group(1).strip() if m else ""
+        return re.sub(r'\*+', '', raw).strip()
     conv_m = re.search(r'\[Conviction\]\s*(\d)', txt)
     conv   = int(conv_m.group(1)) if conv_m else 3
     return {
@@ -121,63 +122,70 @@ def parse_analysis(txt):
     }, conv
 
 def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency, conviction, info):
-    is_buy = sig == "BUY"
-    bc     = "#00E676" if is_buy else "#FF5252"
-    hbg    = "#071912" if is_buy else "#180707"
-    badge  = "▲ BUY" if is_buy else "▼ SELL"
-    rr     = abs(tp - price) / abs(price - sl) if abs(price - sl) > 0 else 0
-    stars  = "⭐" * conviction + "☆" * (5 - conviction)
-    sym    = ticker.replace(".BK", "")
-    pct_tp = ((tp - price) / price * 100)
-    pct_sl = ((sl - price) / price * 100)
+    is_buy    = sig == "BUY"
+    bc        = "#00E676" if is_buy else "#FF5252"
+    hbg       = "#071912" if is_buy else "#180707"
+    badge     = "▲ BUY" if is_buy else "▼ SELL"
+    rr        = abs(tp - price) / abs(price - sl) if abs(price - sl) > 0 else 0
+    pct_tp    = (tp - price) / price * 100
+    pct_sl    = (sl - price) / price * 100
+    now       = datetime.now(TZ_THAI).strftime("%H:%M")
+    sym       = ticker.replace(".BK", "")
+    rsi_color = "#FF5252" if rsi >= 70 else ("#00E676" if rsi <= 30 else "#90CAF9")
+    conv_bar  = "▰" * conviction + "▱" * (5 - conviction)
 
     name_line = info.get("name") or sym
-    biz_line  = (info.get("business") or "")[:50]
-    reason_ai = (info.get("reason") or "")[:60]
+    biz_line  = (info.get("business") or "")[:55]
+    reason_ai = (info.get("reason") or "")[:65]
 
     return {
         "type": "flex",
-        "altText": f"{'🟢' if is_buy else '🔴'} {badge} {sym} {currency}{price:.2f}  R:R 1:{rr:.1f}  {stars}",
+        "altText": f"{'🟢' if is_buy else '🔴'} {badge} {sym} {currency}{price:.2f}  R:R 1:{rr:.1f}",
         "contents": {
             "type": "bubble", "size": "kilo",
             "header": {
                 "type": "box", "layout": "vertical",
                 "backgroundColor": hbg, "paddingAll": "14px", "spacing": "none",
                 "contents": [
-                    # Row 1: ticker left, badge pill right
+                    # Ticker + badge pill
                     {"type": "box", "layout": "horizontal", "contents": [
                         {"type": "text", "text": sym, "weight": "bold",
                          "size": "xxl", "color": "#FFFFFF", "flex": 1},
-                        {"type": "box", "layout": "vertical",
-                         "backgroundColor": bc, "cornerRadius": "6px",
-                         "paddingStart": "10px", "paddingEnd": "10px",
-                         "paddingTop": "3px", "paddingBottom": "3px",
-                         "justifyContent": "center",
+                        {"type": "box", "layout": "vertical", "backgroundColor": bc,
+                         "cornerRadius": "6px", "paddingStart": "10px", "paddingEnd": "10px",
+                         "paddingTop": "3px", "paddingBottom": "3px", "justifyContent": "center",
                          "contents": [{"type": "text", "text": badge,
-                                       "weight": "bold", "size": "sm",
-                                       "color": "#000000"}]},
+                                       "weight": "bold", "size": "sm", "color": "#000000"}]},
                     ]},
-                    # Row 2: price + company name
-                    {"type": "box", "layout": "horizontal",
-                     "margin": "xs", "contents": [
+                    # Price + company name
+                    {"type": "box", "layout": "horizontal", "margin": "xs", "contents": [
                         {"type": "text", "text": f"{currency}{price:,.2f}",
                          "weight": "bold", "size": "lg", "color": bc, "flex": 1},
                         {"type": "text", "text": name_line, "size": "xxs",
                          "color": "#546E7A", "align": "end", "flex": 2, "wrap": True},
                     ]},
-                    # Row 3: what they do
-                    *([{"type": "text", "text": f"🏢  {biz_line}", "size": "xxs",
-                        "color": "#607D8B", "wrap": True, "margin": "xs"}] if biz_line else []),
+                    # Business + RSI pill + time
+                    {"type": "box", "layout": "horizontal", "margin": "xs",
+                     "alignItems": "center", "contents": [
+                        *([{"type": "text", "text": f"🏢  {biz_line}", "size": "xxs",
+                            "color": "#607D8B", "wrap": True, "flex": 3}] if biz_line else []),
+                        {"type": "box", "layout": "vertical", "flex": 0,
+                         "backgroundColor": "#1A2332", "cornerRadius": "10px",
+                         "paddingStart": "7px", "paddingEnd": "7px",
+                         "paddingTop": "2px", "paddingBottom": "2px",
+                         "contents": [{"type": "text", "text": f"RSI {rsi:.0f}",
+                                       "size": "xxs", "color": rsi_color, "weight": "bold"}]},
+                        {"type": "text", "text": f" ⏰{now}", "size": "xxs",
+                         "color": "#37474F", "flex": 0},
+                    ]},
                 ]
             },
             "body": {
                 "type": "box", "layout": "vertical",
                 "backgroundColor": "#0E1621", "paddingAll": "12px", "spacing": "sm",
                 "contents": [
-                    # Signal reason
-                    {"type": "text", "text": reason, "color": "#CFD8DC",
-                     "size": "xs", "wrap": True},
-                    # AI take
+                    {"type": "text", "text": reason,
+                     "color": "#CFD8DC", "size": "xs", "wrap": True},
                     *([{"type": "text", "text": f"🤖  {reason_ai}",
                         "color": "#FFD54F", "size": "xs", "wrap": True}] if reason_ai else []),
 
@@ -186,35 +194,39 @@ def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency
                     # TP | SL side by side
                     {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
                         {"type": "box", "layout": "vertical",
-                         "backgroundColor": "#0D2016", "cornerRadius": "8px",
-                         "paddingAll": "8px", "flex": 1,
+                         "backgroundColor": "#0A1F10", "cornerRadius": "10px",
+                         "paddingAll": "10px", "flex": 1,
                          "contents": [
-                             {"type": "text", "text": "🎯  TP", "size": "xxs",
-                              "color": "#69F0AE", "weight": "bold"},
+                             {"type": "text", "text": "🎯  TARGET", "size": "xxs",
+                              "color": "#2E7D52", "weight": "bold"},
                              {"type": "text", "text": f"{currency}{tp:,.2f}",
-                              "size": "sm", "color": "#69F0AE", "weight": "bold"},
+                              "size": "md", "color": "#69F0AE", "weight": "bold"},
                              {"type": "text", "text": f"{pct_tp:+.1f}%",
                               "size": "xxs", "color": "#2E7D52"},
                          ]},
                         {"type": "box", "layout": "vertical",
-                         "backgroundColor": "#200D0D", "cornerRadius": "8px",
-                         "paddingAll": "8px", "flex": 1,
+                         "backgroundColor": "#1F0A0A", "cornerRadius": "10px",
+                         "paddingAll": "10px", "flex": 1,
                          "contents": [
-                             {"type": "text", "text": "🛡  SL", "size": "xxs",
-                              "color": "#FF8A80", "weight": "bold"},
+                             {"type": "text", "text": "🛡  STOP", "size": "xxs",
+                              "color": "#7D2E2E", "weight": "bold"},
                              {"type": "text", "text": f"{currency}{sl:,.2f}",
-                              "size": "sm", "color": "#FF8A80", "weight": "bold"},
+                              "size": "md", "color": "#FF8A80", "weight": "bold"},
                              {"type": "text", "text": f"{pct_sl:+.1f}%",
                               "size": "xxs", "color": "#7D2E2E"},
                          ]},
                     ]},
 
-                    # R:R + stars
-                    {"type": "box", "layout": "horizontal",
-                     "margin": "xs", "contents": [
+                    # R:R + conviction bar pill
+                    {"type": "box", "layout": "horizontal", "margin": "xs", "contents": [
                         {"type": "text", "text": f"📏  R:R  1 : {rr:.1f}",
                          "color": "#90CAF9", "size": "xs", "flex": 1},
-                        {"type": "text", "text": stars, "size": "xs", "align": "end"},
+                        {"type": "box", "layout": "vertical", "flex": 0,
+                         "backgroundColor": "#1A2332", "cornerRadius": "10px",
+                         "paddingStart": "8px", "paddingEnd": "8px",
+                         "paddingTop": "2px", "paddingBottom": "2px",
+                         "contents": [{"type": "text", "text": conv_bar,
+                                       "size": "xs", "color": bc}]},
                     ]},
                 ]
             },
