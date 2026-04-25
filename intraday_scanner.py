@@ -90,17 +90,28 @@ def tv_url(ticker):
     sym = ("SET:"+ticker.replace(".BK","")) if ticker.endswith(".BK") else ticker
     return f"https://www.tradingview.com/chart/?symbol={sym}&interval=60&studies=STD%3BEMA%4020%2C%2050%2C%20200"
 
-def analyze_with_claude(ticker, sig, price, rsi, tp, sl):
+def fetch_top_news(ticker):
+    try:
+        news = yf.Ticker(ticker).news or []
+        headlines = [n.get('title','') for n in news[:3] if n.get('title')]
+        return headlines
+    except:
+        return []
+
+def analyze_with_claude(ticker, sig, price, rsi, tp, sl, headlines):
     try:
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        news_txt = "\n".join(f"- {h}" for h in headlines) if headlines else "ไม่มีข่าว"
         msg = client.messages.create(
-            model="claude-haiku-4-5-20251001", max_tokens=180,
+            model="claude-haiku-4-5-20251001", max_tokens=350,
             messages=[{"role":"user","content":
-                f"หุ้น {ticker} สัญญาณ {sig} ราคา {price:.2f} TP:{tp:.2f} SL:{sl:.2f}\n"
-                f"ตอบภาษาไทย:\n"
+                f"หุ้น {ticker} สัญญาณ {sig} ราคา {price:.2f} RSI:{rsi:.1f} TP:{tp:.2f} SL:{sl:.2f}\n"
+                f"ข่าวล่าสุด:\n{news_txt}\n\n"
+                f"ตอบภาษาไทยตามรูปแบบ:\n"
                 f"[ชื่อ] ชื่อเต็มบริษัท\n"
-                f"[ธุรกิจ] ทำอะไร ใน 8 คำหรือน้อยกว่า\n"
-                f"[เหตุผล] ทำไมควร{sig} ใน 1 ประโยคสั้น\n"
+                f"[ธุรกิจ] ทำอะไร 6-8 คำ\n"
+                f"[เหตุผล] วิเคราะห์สัญญาณ+ข่าว 2 ประโยค\n"
+                f"[ข่าว] สรุปข่าวที่กระทบราคาสั้นๆ 1 ประโยค\n"
                 f"[Conviction] X/5"}])
         return msg.content[0].text
     except Exception as e:
@@ -108,7 +119,7 @@ def analyze_with_claude(ticker, sig, price, rsi, tp, sl):
 
 def parse_analysis(txt):
     if not txt:
-        return {"name":"","business":"","reason":""}, 3
+        return {"name":"","business":"","reason":"","news":""}, 3
     def extract(tag):
         m = re.search(rf'\[{tag}\]\s*(.+?)(?=\[|$)', txt, re.DOTALL)
         raw = m.group(1).strip() if m else ""
@@ -119,6 +130,7 @@ def parse_analysis(txt):
         "name":     extract("ชื่อ"),
         "business": extract("ธุรกิจ"),
         "reason":   extract("เหตุผล"),
+        "news":     extract("ข่าว"),
     }, conv
 
 def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency, conviction, info):
@@ -135,8 +147,9 @@ def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency
     conv_bar  = "▰" * conviction + "▱" * (5 - conviction)
 
     name_line = info.get("name") or sym
-    biz_line  = (info.get("business") or "")[:55]
-    reason_ai = (info.get("reason") or "")[:65]
+    biz_line  = info.get("business") or ""
+    reason_ai = info.get("reason") or ""
+    news_line = info.get("news") or ""
 
     return {
         "type": "flex",
@@ -188,6 +201,12 @@ def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency
                      "color": "#CFD8DC", "size": "xs", "wrap": True},
                     *([{"type": "text", "text": f"🤖  {reason_ai}",
                         "color": "#FFD54F", "size": "xs", "wrap": True}] if reason_ai else []),
+                    *([{"type": "box", "layout": "horizontal", "margin": "xs",
+                        "backgroundColor": "#111B2A", "cornerRadius": "6px",
+                        "paddingAll": "6px", "contents": [
+                            {"type": "text", "text": "📰  " + news_line,
+                             "color": "#90CAF9", "size": "xxs", "wrap": True},
+                        ]}] if news_line else []),
 
                     {"type": "separator", "color": "#1E2D3D", "margin": "sm"},
 
@@ -333,7 +352,8 @@ def main():
 
         sig, price, rsi, tp, sl, tp_src, reason = res
 
-        ai_text      = analyze_with_claude(ticker, sig, price, rsi, tp, sl)
+        headlines    = fetch_top_news(ticker)
+        ai_text      = analyze_with_claude(ticker, sig, price, rsi, tp, sl, headlines)
         info, conv   = parse_analysis(ai_text)
         print(f"[SIGNAL] {ticker} {sig} RSI:{rsi:.1f} conv:{conv}/5 src:{tp_src}")
 
