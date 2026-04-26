@@ -251,11 +251,16 @@ def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency
             },
             "footer": {
                 "type": "box", "layout": "vertical",
-                "backgroundColor": "#070F18", "paddingAll": "10px",
+                "backgroundColor": "#070F18", "paddingAll": "10px", "spacing": "xs",
                 "contents": [
                     {"type": "button",
                      "action": {"type": "uri", "label": "📊 ดูกราฟ 1H", "uri": tv_url(ticker)},
                      "style": "primary", "color": bc, "height": "sm"},
+                    {"type": "button",
+                     "action": {"type": "postback", "label": "🤖 AI Generate Plan",
+                                "data": f"plan_{ticker}_{sig}_{price:.2f}_{tp:.2f}_{sl:.2f}",
+                                "displayText": f"ขอแผนการเทรด {ticker}"},
+                     "style": "secondary", "color": "#90CAF9", "height": "sm"},
                 ]
             }
         }
