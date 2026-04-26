@@ -391,6 +391,30 @@ def process_message(text, portfolio):
     # Fallback → Claude general Q&A
     return ask_claude_stock(text)
 
+def generate_trading_plan(ticker, sig, price, tp, sl):
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        rr = abs(tp - price) / abs(price - sl) if abs(price - sl) > 0 else 0
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001", max_tokens=600,
+            system="คุณเป็นผู้เชี่ยวชาญด้านการวิเคราะห์หุ้นและการวางแผนการเทรด ตอบภาษาไทยกระชับ",
+            messages=[{"role": "user", "content":
+                f"สร้างแผนการเทรดสำหรับ {ticker}\n"
+                f"สัญญาณ: {sig}\n"
+                f"ราคาปัจจุบัน: {price:.2f}\n"
+                f"เป้าหมาย (TP): {tp:.2f}\n"
+                f"จุดตัดขาดทุน (SL): {sl:.2f}\n"
+                f"R:R = 1:{rr:.1f}\n\n"
+                f"กรุณาสร้างแผนการเทรดที่ประกอบด้วย:\n"
+                f"1. สรุปสัญญาณ\n"
+                f"2. จุดเข้าซื้อที่เหมาะสม\n"
+                f"3. กลยุทธ์การจัดการความเสี่ยง\n"
+                f"4. เงื่อนไขที่ควรยกเลิกแผน\n"
+                f"5. คำแนะนำสุดท้าย"}])
+        return msg.content[0].text
+    except Exception as e:
+        return f"ขออภัย เกิดข้อผิดพลาด: {e}"
+
 # ── Flask routes ──────────────────────────────────────────────────
 
 @app.route('/', methods=['GET','POST','HEAD','OPTIONS'])
@@ -418,6 +442,22 @@ def webhook():
                                 headers={'Content-Type':'application/json','Authorization':f'Bearer {LINE_TOKEN}'},
                                 json={'to':uid,'messages':[{'type':'text','text':'ยินดีต้อนรับ! 📈 คุณจะได้รับการแจ้งเตือนหุ้นอัตโนมัติแล้วนะครับ'}]},
                                 timeout=10)
+                    elif etype == 'postback':
+                        rt   = event.get('replyToken')
+                        data = event.get('postback', {}).get('data', '')
+                        if data.startswith('plan_') and rt:
+                            parts = data.split('_')
+                            if len(parts) >= 6:
+                                try:
+                                    p_ticker = parts[1]
+                                    p_sig    = parts[2]
+                                    p_price  = float(parts[3])
+                                    p_tp     = float(parts[4])
+                                    p_sl     = float(parts[5])
+                                    plan     = generate_trading_plan(p_ticker, p_sig, p_price, p_tp, p_sl)
+                                    reply_line(rt, f"🤖 AI Trading Plan\n{p_ticker} {p_sig}\n{'─'*20}\n{plan}")
+                                except Exception as e:
+                                    reply_line(rt, f"เกิดข้อผิดพลาด: {e}")
                     elif etype == 'unfollow':
                         uid = event.get('source', {}).get('userId')
                         if uid:
