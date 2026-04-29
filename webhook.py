@@ -53,6 +53,21 @@ def get_fx_rate(from_currency):
         return 1.0
     except: return 0.03
 
+def save_alerts_to_sheet(alerts):
+    try:
+        sh = get_gsheet()
+        if not sh: return
+        try:
+            ws = sh.worksheet('Alerts')
+            ws.clear()
+        except:
+            ws = sh.add_worksheet(title='Alerts', rows=100, cols=4)
+        ws.append_row(['Ticker', 'TP', 'SL', 'Triggered'])
+        for ticker, a in alerts.items():
+            ws.append_row([ticker, a['tp'], a['sl'], str(a.get('triggered', False))])
+    except Exception as e:
+        print(f"[ALERTS SHEET] {e}")
+
 def log_transaction_to_sheet(tx_type, ticker, qty, price, total_orig, currency, pnl=None):
     try:
         sh = get_gsheet()
@@ -135,7 +150,26 @@ def restore_portfolio_from_sheets():
         except Exception as e:
             print(f"[RESTORE] Transactions sheet error: {e}")
 
-        print(f"[RESTORE] Restored {len(portfolio['holdings'])} holdings, {len(portfolio['transactions'])} transactions from Sheets")
+        # Restore alerts from Alerts sheet
+        try:
+            ws = sh.worksheet('Alerts')
+            rows = ws.get_all_values()
+            for row in rows[1:]:
+                if len(row) < 3 or not row[0]:
+                    continue
+                try:
+                    ticker = row[0].strip().upper()
+                    portfolio['alerts'][ticker] = {
+                        'tp': float(row[1]),
+                        'sl': float(row[2]),
+                        'triggered': row[3].lower() == 'true' if len(row) > 3 else False
+                    }
+                except (ValueError, IndexError):
+                    continue
+        except Exception:
+            pass  # Alerts sheet doesn't exist yet
+
+        print(f"[RESTORE] Restored {len(portfolio['holdings'])} holdings, {len(portfolio['transactions'])} transactions, {len(portfolio['alerts'])} alerts from Sheets")
         return portfolio
     except Exception as e:
         print(f"[RESTORE] Failed: {e}")
@@ -235,6 +269,7 @@ def set_alert(text, portfolio):
     if 'alerts' not in portfolio: portfolio['alerts'] = {}
     portfolio['alerts'][ticker] = {'tp': tp, 'sl': sl, 'triggered': False}
     save_portfolio(portfolio)
+    save_alerts_to_sheet(portfolio['alerts'])
     return (f"🔔 ตั้ง Alert แล้วครับ\n"
             f"หุ้น : {ticker}\n"
             f"🎯 TP : {tp:.2f}\n"
@@ -261,7 +296,9 @@ def check_alerts():
                     elif price <= a['sl']:
                         push_line(f"🛡 SL HIT!\n{ticker}  ราคา {price:.2f}\n🔴 ถึง Stop Loss {a['sl']:.2f} แล้วครับ!")
                         alerts[ticker]['triggered'] = True; changed = True
-                if changed: save_portfolio(portfolio)
+                if changed:
+                    save_portfolio(portfolio)
+                    save_alerts_to_sheet(portfolio.get('alerts', {}))
         except Exception as e:
             print(f"[ALERT THREAD] {e}")
         time.sleep(300)  # check every 5 min
@@ -479,11 +516,12 @@ def claude_proxy():
         res.headers['Access-Control-Allow-Origin'] = '*'
         return res, 500
 
-@app.route('/', methods=['GET','POST','HEAD','OPTIONS'])
-@app.route('/webhook', methods=['GET','POST','HEAD','OPTIONS'])
-@app.route('/dashboard')
+@app.route('/', methods=['GET','HEAD'])
+@app.route('/dashboard', methods=['GET'])
 def dashboard():
     return send_file('dashboard.html')
+
+@app.route('/webhook', methods=['GET','POST','HEAD','OPTIONS'])
 def webhook():
     if request.method == 'POST':
         try:
@@ -515,6 +553,21 @@ def webhook():
         except Exception as e:
             print(f"[ERROR] {e}")
     return 'OK', 200
+
+# ── startup: sync portfolio.json → Google Sheets ─────────────────
+
+def startup_sync():
+    try:
+        portfolio = load_portfolio()
+        if portfolio.get('holdings'):
+            print("[STARTUP] Syncing portfolio to Google Sheets...")
+            update_portfolio_sheet(portfolio)
+        if portfolio.get('alerts'):
+            save_alerts_to_sheet(portfolio['alerts'])
+    except Exception as e:
+        print(f"[STARTUP] Sync failed: {e}")
+
+startup_sync()
 
 # ── start alert background thread ────────────────────────────────
 
