@@ -83,12 +83,73 @@ def update_portfolio_sheet(portfolio):
     except Exception as e: print(f"[SHEET PORT] {e}")
 
 PORTFOLIO_FILE = 'portfolio.json'
+
+def restore_portfolio_from_sheets():
+    """Rebuild portfolio.json from Google Sheets when the file is missing (e.g. after Render restart)."""
+    try:
+        sh = get_gsheet()
+        if not sh:
+            return {"holdings": {}, "transactions": [], "alerts": {}}
+
+        portfolio = {"holdings": {}, "transactions": [], "alerts": {}}
+
+        # Restore holdings from Portfolio sheet (cols: Ticker, qty, avg_price, ...)
+        try:
+            ws = sh.worksheet('Portfolio')
+            rows = ws.get_all_values()
+            for row in rows[1:]:  # skip header
+                if len(row) < 3 or not row[0] or row[0] == 'Ticker':
+                    continue
+                try:
+                    ticker = row[0].strip().upper()
+                    qty = float(row[1])
+                    avg_price = float(row[2])
+                    if qty > 0:
+                        portfolio['holdings'][ticker] = {'qty': round(qty, 6), 'avg_price': round(avg_price, 4)}
+                except (ValueError, IndexError):
+                    continue
+        except Exception as e:
+            print(f"[RESTORE] Portfolio sheet error: {e}")
+
+        # Restore transactions from Transactions sheet (cols: date, type, ticker, qty, price, total, pnl)
+        try:
+            ws = sh.worksheet('Transactions')
+            rows = ws.get_all_values()
+            for row in rows[1:]:  # skip header
+                if len(row) < 5 or not row[1]:
+                    continue
+                try:
+                    tx = {
+                        'date':  row[0],
+                        'type':  row[1].upper(),
+                        'ticker': row[2].upper(),
+                        'qty':   float(row[3]),
+                        'price': float(row[4]),
+                    }
+                    if len(row) > 6 and row[6]:
+                        try: tx['pnl'] = float(row[6])
+                        except ValueError: pass
+                    portfolio['transactions'].append(tx)
+                except (ValueError, IndexError):
+                    continue
+        except Exception as e:
+            print(f"[RESTORE] Transactions sheet error: {e}")
+
+        print(f"[RESTORE] Restored {len(portfolio['holdings'])} holdings, {len(portfolio['transactions'])} transactions from Sheets")
+        return portfolio
+    except Exception as e:
+        print(f"[RESTORE] Failed: {e}")
+        return {"holdings": {}, "transactions": [], "alerts": {}}
+
 def load_portfolio():
     try:
         if os.path.exists(PORTFOLIO_FILE):
             with open(PORTFOLIO_FILE,'r',encoding='utf-8') as f: return json.load(f)
     except: pass
-    return {"holdings":{},"transactions":[],"alerts":{}}
+    print("[RESTORE] portfolio.json not found — restoring from Google Sheets...")
+    portfolio = restore_portfolio_from_sheets()
+    save_portfolio(portfolio)
+    return portfolio
 
 def save_portfolio(data):
     try:
