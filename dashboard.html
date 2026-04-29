@@ -285,7 +285,7 @@ function saveWatch(){localStorage.setItem('pai_watch',JSON.stringify(extraWatch)
 function setCurrency(c){
   currency=c;
   document.querySelectorAll('.cur-btn').forEach(b=>b.classList.toggle('active',b.textContent===c));
-  renderDashboard();renderDividends();
+  renderDashboard();renderDividends();renderWatchCards();renderTransactions();
 }
 function fmt(usd){
   if(currency==='THB')return '฿'+(usd*USD_THB).toLocaleString('en',{maximumFractionDigits:0});
@@ -573,7 +573,8 @@ async function syncToSheets(){
   const btn=document.getElementById('sync-btn');
   btn.textContent='⏳ Syncing...';btn.disabled=true;
   try{
-    const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/sync-portfolio',{method:'POST',headers:{'Content-Type':'application/json'}});
+    const body={holdings:holdings.map(h=>({ticker:h.ticker,shares:h.shares,cost:h.cost}))};
+    const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/sync-portfolio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const data=await res.json();
     if(data.ok){btn.textContent='✅ Synced!';setTimeout(()=>{btn.textContent='📊 Sync Sheets';btn.disabled=false;},3000);}
     else throw new Error(data.error||'Failed');
