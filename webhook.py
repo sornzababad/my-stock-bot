@@ -10,11 +10,13 @@ from flask import Flask, request
 import requests, anthropic, yfinance as yf, pandas as pd
 import os, json, re, time, threading
 from users import load_users, add_user, remove_user
+from portfolio_routes import portfolio_bp
 from datetime import datetime, timezone, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
 
 app = Flask(__name__)
+app.register_blueprint(portfolio_bp)
 TZ_THAI            = timezone(timedelta(hours=7))
 LINE_TOKEN         = os.getenv('LINE_ACCESS_TOKEN')
 ANTHROPIC_API_KEY  = os.getenv('ANTHROPIC_API_KEY')
