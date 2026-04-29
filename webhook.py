@@ -564,7 +564,18 @@ def sync_portfolio_to_sheets():
         res.headers['Access-Control-Allow-Headers'] = 'Content-Type'
         return res
     try:
-        portfolio = load_portfolio()
+        body = request.json or {}
+        if body.get('holdings'):
+            portfolio = load_portfolio()
+            for h in body['holdings']:
+                ticker = h['ticker'].upper()
+                portfolio['holdings'][ticker] = {
+                    'qty': round(float(h['shares']), 6),
+                    'avg_price': round(float(h['cost']), 4)
+                }
+            save_portfolio(portfolio)
+        else:
+            portfolio = load_portfolio()
         update_portfolio_sheet(portfolio)
         if portfolio.get('alerts'):
             save_alerts_to_sheet(portfolio['alerts'])
