@@ -556,6 +556,62 @@ def webhook():
             print(f"[ERROR] {e}")
     return 'OK', 200
 
+@app.route('/api/suggest', methods=['GET', 'OPTIONS'])
+def suggest_tickers():
+    if request.method == 'OPTIONS':
+        res = jsonify({'ok': True})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res
+    try:
+        universe = ['AAPL','MSFT','NVDA','TSLA','AMZN','META','GOOGL','AMD','SCHD','QQQ',
+                    'SPY','PLTR','COIN','MSTR','TSM','AVGO','SMCI','ARM','MU','ORCL']
+        technicals = []
+        for ticker in universe:
+            try:
+                df = yf.download(ticker, period='3mo', interval='1d', progress=False, auto_adjust=True)
+                if df.empty or len(df) < 20: continue
+                if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
+                price  = float(df['Close'].iloc[-1])
+                d      = df['Close'].diff()
+                gain   = d.where(d > 0, 0).rolling(14).mean()
+                loss   = (-d.where(d < 0, 0)).rolling(14).mean()
+                rsi    = float((100 - 100 / (1 + gain / loss)).iloc[-1])
+                ema20  = float(df['Close'].ewm(span=20, adjust=False).mean().iloc[-1])
+                ema50  = float(df['Close'].ewm(span=50, adjust=False).mean().iloc[-1])
+                vol    = float(df['Volume'].iloc[-5:].mean())
+                chg1w  = float((df['Close'].iloc[-1] / df['Close'].iloc[-6] - 1) * 100)
+                trend  = 'UP' if ema20 > ema50 else 'DOWN'
+                technicals.append(f"{ticker}: price={price:.2f} RSI={rsi:.1f} trend={trend} 1w={chg1w:+.1f}%")
+            except Exception:
+                continue
+
+        if not technicals:
+            res = jsonify({'error': 'Could not fetch technical data'})
+            res.headers['Access-Control-Allow-Origin'] = '*'
+            return res, 500
+
+        prompt = (
+            "You are a technical analyst. Based on these real-time indicators, "
+            "pick the TOP 5 tickers most worth watching right now. "
+            "Prefer tickers with strong momentum (RSI 50-70, uptrend) or oversold bounces (RSI<35). "
+            "Respond ONLY with a JSON array, no markdown:\n"
+            '[{"ticker":"X","signal":"BUY|WATCH|AVOID","reason":"1 concise sentence with key technicals"}]\n\n'
+            + '\n'.join(technicals)
+        )
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        msg = client.messages.create(
+            model='claude-haiku-4-5-20251001', max_tokens=600,
+            messages=[{'role': 'user', 'content': prompt}]
+        )
+        text = msg.content[0].text.strip().replace('```json','').replace('```','').strip()
+        res = jsonify({'ok': True, 'suggestions': __import__('json').loads(text)})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res
+    except Exception as e:
+        res = jsonify({'error': str(e)})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res, 500
+
 # ── startup: sync portfolio.json → Google Sheets ─────────────────
 
 def startup_sync():
