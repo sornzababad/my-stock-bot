@@ -556,6 +556,75 @@ def webhook():
             print(f"[ERROR] {e}")
     return 'OK', 200
 
+@app.route('/api/add-transaction', methods=['POST', 'OPTIONS'])
+def add_transaction():
+    if request.method == 'OPTIONS':
+        res = jsonify({'ok': True})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        res.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return res
+    try:
+        d        = request.json or {}
+        tx_type  = d.get('type', '').upper()
+        ticker   = d.get('ticker', '').upper().strip()
+        shares   = float(d.get('shares', 0))
+        price    = float(d.get('price', 0))
+        fees     = float(d.get('fees', 0))
+        notes    = d.get('notes', '')
+        date_str = d.get('date', datetime.now(TZ_THAI).strftime('%Y-%m-%d'))
+
+        if not ticker or not shares or not price:
+            res = jsonify({'ok': False, 'error': 'ticker, shares, price are required'})
+            res.headers['Access-Control-Allow-Origin'] = '*'
+            return res, 400
+
+        portfolio = load_portfolio()
+        now_str   = datetime.now(TZ_THAI).strftime('%d/%m/%Y %H:%M')
+        total_usd = shares * price
+
+        if tx_type == 'BUY':
+            if ticker in portfolio['holdings']:
+                old = portfolio['holdings'][ticker]
+                new_qty = old['qty'] + shares
+                new_avg = (old['qty'] * old['avg_price'] + shares * price) / new_qty
+                portfolio['holdings'][ticker] = {'qty': round(new_qty, 6), 'avg_price': round(new_avg, 4)}
+            else:
+                portfolio['holdings'][ticker] = {'qty': round(shares, 6), 'avg_price': round(price, 4)}
+            portfolio['transactions'].append({
+                'type': 'BUY', 'ticker': ticker, 'qty': round(shares, 6),
+                'price': round(price, 4), 'total_usd': round(total_usd, 2), 'date': now_str
+            })
+            log_transaction_to_sheet('BUY', ticker, shares, price, total_usd, 'USD')
+
+        elif tx_type == 'SELL':
+            if ticker not in portfolio['holdings']:
+                res = jsonify({'ok': False, 'error': f'{ticker} not in portfolio'})
+                res.headers['Access-Control-Allow-Origin'] = '*'
+                return res, 400
+            h   = portfolio['holdings'][ticker]
+            pnl = (price - h['avg_price']) * shares
+            h['qty'] = round(h['qty'] - shares, 6)
+            if h['qty'] <= 0.000001:
+                del portfolio['holdings'][ticker]
+            else:
+                portfolio['holdings'][ticker] = h
+            portfolio['transactions'].append({
+                'type': 'SELL', 'ticker': ticker, 'qty': round(shares, 6),
+                'price': round(price, 4), 'pnl': round(pnl, 2), 'date': now_str
+            })
+            log_transaction_to_sheet('SELL', ticker, shares, price, total_usd, 'USD', round(pnl, 2))
+
+        save_portfolio(portfolio)
+        update_portfolio_sheet(portfolio)
+
+        res = jsonify({'ok': True, 'holdings': len(portfolio['holdings'])})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res
+    except Exception as e:
+        res = jsonify({'ok': False, 'error': str(e)})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res, 500
+
 @app.route('/api/ai-plan', methods=['POST', 'OPTIONS'])
 def ai_plan():
     if request.method == 'OPTIONS':

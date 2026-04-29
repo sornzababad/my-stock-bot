@@ -619,7 +619,19 @@ function addTransaction(){
   if(!ticker||!shares||!price){alert('กรุณากรอก Ticker, Shares และ Price ครับ');return;}
   const txn={date:d,type,ticker,shares,price,fees,notes,synced:false};
   transactions.push(txn);saveTxns();
-  syncToSheets(txn).then(ok=>{if(ok){txn.synced=true;saveTxns();renderTransactions();}});
+  // Save to DashboardTransactions sheet AND update portfolio.json + Portfolio sheet
+  Promise.all([
+    syncToSheets(txn),
+    fetch(PROXY+'/api/add-transaction',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:d,type,ticker,shares,price,fees,notes})})
+      .then(r=>r.json()).catch(()=>({ok:false}))
+  ]).then(([sheetOk, portRes])=>{
+    if(sheetOk){txn.synced=true;saveTxns();}
+    if(portRes.ok){
+      // Reload holdings from server to reflect the transaction
+      loadHoldingsFromServer().then(()=>loadLivePrices().then(()=>renderDashboard()));
+    }
+    renderTransactions();
+  });
   renderTransactions();
   ['txn-date','txn-ticker','txn-shares','txn-price','txn-fees','txn-notes'].forEach(id=>document.getElementById(id).value='');
 }
