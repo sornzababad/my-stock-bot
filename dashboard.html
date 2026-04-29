@@ -131,7 +131,10 @@
 <div id="page-dashboard" class="page active">
   <div class="page-header">
     <div><div class="page-title">Portfolio Dashboard</div><div class="page-sub" id="dash-updated">mock prices · push ↻ to refresh</div></div>
-    <button class="btn btn-secondary btn-sm" onclick="refreshAll()">↻ Refresh</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-secondary btn-sm" onclick="refreshAll()">↻ Refresh</button>
+      <button class="btn btn-secondary btn-sm" id="sync-btn" onclick="syncToSheets()" title="Sync portfolio to Google Sheets">📊 Sync Sheets</button>
+    </div>
   </div>
   <div class="grid-4">
     <div class="card"><h3>Total Value</h3><div class="stat-val" id="stat-total">—</div><div class="stat-sub">All holdings</div></div>
@@ -184,7 +187,12 @@
       </div>
       <button class="btn btn-primary btn-sm" onclick="addWatchFromInput()">+ Add</button>
       <button class="btn btn-secondary btn-sm" onclick="refreshSignals()">↻ Signals</button>
+      <button class="btn btn-secondary btn-sm" id="suggest-btn" onclick="loadAiSuggestions()" style="background:linear-gradient(135deg,#6c63ff,#00d4aa);color:#fff;border:none">✨ AI Suggest</button>
     </div>
+  </div>
+  <div id="suggest-box" style="display:none;margin-bottom:16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
+    <div style="font-size:.8rem;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em">AI Suggested Tickers · based on live technical data</div>
+    <div id="suggest-list" style="display:flex;flex-wrap:wrap;gap:10px"></div>
   </div>
   <div class="watch-grid" id="watchlist-grid"></div>
 </div>
@@ -405,6 +413,35 @@ async function fetchOneSig(ticker){
 }
 function removeWatch(t){extraWatch=extraWatch.filter(x=>x!==t);saveWatch();delete watchSignals[t];renderWatchCards();}
 function refreshSignals(){watchSignals={};watchAiDone=false;renderWatchCards();loadSignals();}
+async function loadAiSuggestions(){
+  const btn=document.getElementById('suggest-btn');
+  const box=document.getElementById('suggest-box');
+  const list=document.getElementById('suggest-list');
+  btn.textContent='⏳ Analyzing...';btn.disabled=true;
+  box.style.display='none';
+  try{
+    const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/suggest');
+    const data=await res.json();
+    if(!data.ok)throw new Error(data.error||'Failed');
+    const sigColor={BUY:'var(--green)',WATCH:'var(--yellow)',AVOID:'var(--red)'};
+    list.innerHTML=data.suggestions.map(s=>`
+      <div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px;min-width:200px;max-width:260px;flex:1">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-weight:700;font-size:.95rem">${s.ticker}</span>
+          <span class="badge" style="background:${sigColor[s.signal]||'var(--muted)'}22;color:${sigColor[s.signal]||'var(--muted)'}">${s.signal}</span>
+        </div>
+        <div style="font-size:.73rem;color:var(--muted);line-height:1.4;margin-bottom:8px">${s.reason}</div>
+        <button class="btn btn-secondary btn-sm" style="width:100%;font-size:.72rem" onclick="addToWatch('${s.ticker}')">+ Add to Watchlist</button>
+      </div>`).join('');
+    box.style.display='block';
+  }catch(e){list.innerHTML=`<span style="color:var(--red);font-size:.8rem">Error: ${e.message}</span>`;box.style.display='block';}
+  btn.textContent='✨ AI Suggest';btn.disabled=false;
+}
+function addToWatch(t){
+  if(!getAllWatch().includes(t)){extraWatch.push(t);saveWatch();}
+  renderWatchCards();fetchOneSig(t);
+  document.getElementById('suggest-box').style.display='none';
+}
 
 // ── AI PLANNER ──
 let planCI;
@@ -532,6 +569,16 @@ function renderDividends(){
 }
 
 function refreshAll(){renderDashboard();renderDividends();}
+async function syncToSheets(){
+  const btn=document.getElementById('sync-btn');
+  btn.textContent='⏳ Syncing...';btn.disabled=true;
+  try{
+    const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/sync-portfolio',{method:'POST',headers:{'Content-Type':'application/json'}});
+    const data=await res.json();
+    if(data.ok){btn.textContent='✅ Synced!';setTimeout(()=>{btn.textContent='📊 Sync Sheets';btn.disabled=false;},3000);}
+    else throw new Error(data.error||'Failed');
+  }catch(e){btn.textContent='❌ Failed';setTimeout(()=>{btn.textContent='📊 Sync Sheets';btn.disabled=false;},3000);}
+}
 
 // ── INIT ──
 renderDashboard();
