@@ -516,13 +516,15 @@ def claude_proxy():
         res.headers['Access-Control-Allow-Origin'] = '*'
         return res, 500
 
-@app.route('/', methods=['GET','HEAD'])
 @app.route('/dashboard', methods=['GET'])
 def dashboard():
     return send_file('dashboard.html')
 
-@app.route('/webhook', methods=['GET','POST','HEAD','OPTIONS'])
+@app.route('/', methods=['GET','HEAD','POST','OPTIONS'])
+@app.route('/webhook', methods=['GET','HEAD','POST','OPTIONS'])
 def webhook():
+    if request.method == 'GET':
+        return send_file('dashboard.html')
     if request.method == 'POST':
         try:
             body = request.get_json(force=True, silent=True)
