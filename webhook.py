@@ -556,6 +556,116 @@ def webhook():
             print(f"[ERROR] {e}")
     return 'OK', 200
 
+@app.route('/api/ai-plan', methods=['POST', 'OPTIONS'])
+def ai_plan():
+    if request.method == 'OPTIONS':
+        res = jsonify({'ok': True})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        res.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return res
+    try:
+        body      = request.json or {}
+        deposit   = float(body.get('deposit', 0))
+        risk      = body.get('risk', 'moderate')
+        goals     = body.get('goals', '')
+        watchlist = body.get('watchlist', [])
+        buckets   = body.get('buckets', {})
+        lt_amt    = buckets.get('longterm',  {}).get('amount', deposit * 0.6)
+        st_amt    = buckets.get('shortterm', {}).get('amount', deposit * 0.3)
+        cr_amt    = buckets.get('cash',      {}).get('amount', deposit * 0.1)
+        lt_pct    = buckets.get('longterm',  {}).get('pct', 60)
+        st_pct    = buckets.get('shortterm', {}).get('pct', 30)
+        cr_pct    = buckets.get('cash',      {}).get('pct', 10)
+
+        portfolio = load_portfolio()
+        all_tickers = list(portfolio['holdings'].keys()) + [t for t in watchlist if t not in portfolio['holdings']]
+
+        # Live prices + P&L for holdings
+        portfolio_lines = []
+        for ticker, h in portfolio['holdings'].items():
+            price = get_current_price(ticker)
+            if price:
+                pnl     = (price - h['avg_price']) * h['qty']
+                pnl_pct = (price / h['avg_price'] - 1) * 100
+                val     = price * h['qty']
+                portfolio_lines.append(
+                    f"  {ticker}: {h['qty']:.4f}sh @ ${h['avg_price']:.2f} avg | now ${price:.2f} | value ${val:.2f} | P&L {pnl_pct:+.1f}% (${pnl:+.2f})")
+            else:
+                portfolio_lines.append(
+                    f"  {ticker}: {h['qty']:.4f}sh @ ${h['avg_price']:.2f} avg | price unavailable")
+
+        # Technical data for all tickers
+        tech_lines = []
+        for ticker in all_tickers:
+            try:
+                df = yf.download(ticker, period='3mo', interval='1d', progress=False, auto_adjust=True)
+                if df.empty or len(df) < 20: continue
+                if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
+                price  = float(df['Close'].iloc[-1])
+                d      = df['Close'].diff()
+                gain   = d.where(d > 0, 0).rolling(14).mean()
+                loss   = (-d.where(d < 0, 0)).rolling(14).mean()
+                rsi    = float((100 - 100 / (1 + gain / loss)).iloc[-1])
+                ema20  = float(df['Close'].ewm(span=20, adjust=False).mean().iloc[-1])
+                ema50  = float(df['Close'].ewm(span=50, adjust=False).mean().iloc[-1])
+                trend  = 'UPTREND' if ema20 > ema50 else 'DOWNTREND'
+                chg1w  = float((df['Close'].iloc[-1] / df['Close'].iloc[-6] - 1) * 100)
+                tech_lines.append(f"  {ticker}: ${price:.2f}, RSI={rsi:.1f}, {trend}, 1w={chg1w:+.1f}%")
+            except Exception:
+                continue
+
+        port_text  = '\n'.join(portfolio_lines) if portfolio_lines else '  (no holdings yet)'
+        tech_text  = '\n'.join(tech_lines)      if tech_lines      else '  (no data)'
+        watch_text = ', '.join(watchlist)        if watchlist       else 'none'
+
+        prompt = f"""You are my personal investment advisor. I need SPECIFIC, ACTIONABLE instructions.
+
+MY PORTFOLIO:
+{port_text}
+
+TECHNICAL DATA (live):
+{tech_text}
+
+WATCHLIST: {watch_text}
+
+DEPOSIT BREAKDOWN:
+  📈 Long-term  ({lt_pct}%): ${lt_amt:.2f}
+  ⚡ Short-term ({st_pct}%): ${st_amt:.2f}
+  💵 Cash Reserve ({cr_pct}%): ${cr_amt:.2f}
+  Total deposit: ${deposit:.2f}
+
+RISK TOLERANCE: {risk}
+GOALS: {goals or 'Long-term wealth building'}
+
+Give me a SPECIFIC plan for EACH bucket:
+
+📈 LONG-TERM (${lt_amt:.2f}):
+- Which ticker(s) to buy, exact dollar amount, approximate shares
+- Why (reference the technical data)
+
+⚡ SHORT-TERM (${st_amt:.2f}):
+- Which ticker(s) to buy for momentum/swing trade
+- Entry price, target price, stop loss
+
+💵 CASH RESERVE (${cr_amt:.2f}):
+- What are you waiting for (which ticker, at what price to buy the dip)
+
+Then 1-line: overall portfolio health check.
+Be direct. Specific numbers. No disclaimers."""
+
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        msg = client.messages.create(
+            model='claude-haiku-4-5-20251001', max_tokens=1200,
+            messages=[{'role': 'user', 'content': prompt}]
+        )
+        res = jsonify({'ok': True, 'plan': msg.content[0].text})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res
+    except Exception as e:
+        res = jsonify({'error': str(e)})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res, 500
+
 @app.route('/api/live-prices', methods=['GET', 'OPTIONS'])
 def live_prices():
     if request.method == 'OPTIONS':

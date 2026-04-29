@@ -155,25 +155,77 @@
 
 <!-- AI PLANNER -->
 <div id="page-planner" class="page">
-  <div class="page-header"><div><div class="page-title">AI Investment Planner</div><div class="page-sub">Powered by Claude AI</div></div></div>
+  <div class="page-header"><div><div class="page-title">AI Investment Planner</div><div class="page-sub">แบ่งเงินฝากเป็น buckets — AI วางแผนให้แต่ละก้อน</div></div></div>
   <div class="grid-2">
     <div class="card">
-      <div class="section-title">Parameters</div>
-      <div class="ai-input-row">
-        <div class="ai-input-group"><label id="deposit-label">Monthly Deposit (USD)</label><input type="number" id="monthly-deposit" value="1000" style="width:130px"/></div>
-        <div class="ai-input-group"><label>Target Growth (%/yr)</label><input type="number" id="target-growth" value="8" style="width:90px"/></div>
-        <div class="ai-input-group"><label>Risk</label><select id="risk-level" style="width:115px"><option value="conservative">Conservative</option><option value="moderate" selected>Moderate</option><option value="aggressive">Aggressive</option></select></div>
+      <div class="section-title">เงินฝากรอบนี้</div>
+      <div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:18px">
+        <div class="ai-input-group" style="flex:1">
+          <label id="deposit-label">จำนวนเงิน (USD)</label>
+          <input type="number" id="monthly-deposit" value="1000" style="width:100%;font-size:1.2rem;font-weight:700" oninput="updateBuckets()"/>
+        </div>
+        <div class="ai-input-group">
+          <label>Risk</label>
+          <select id="risk-level" style="width:130px">
+            <option value="conservative">Conservative</option>
+            <option value="moderate" selected>Moderate</option>
+            <option value="aggressive">Aggressive</option>
+          </select>
+        </div>
       </div>
-      <hr class="divider"/>
-      <div class="section-title">Target Allocation</div>
-      <div id="alloc-sliders"></div>
-      <div class="alloc-total" id="alloc-status"></div>
-      <div class="ai-input-group" style="margin-bottom:11px"><label>Additional context</label><textarea id="ai-context" placeholder="e.g. Focus on dividend stocks this month..."></textarea></div>
-      <button class="btn btn-primary" onclick="runAIPlanner()">🤖 Get AI Recommendation</button>
+      <div class="section-title" style="margin-bottom:10px">แบ่งสัดส่วน</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+        <div style="background:var(--card2);border-radius:10px;padding:12px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-weight:600;color:var(--green)">📈 Long-term</span>
+            <span id="lt-amt" style="font-weight:700;color:var(--green)">$600</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <input type="range" id="lt-pct" min="0" max="100" value="60" style="flex:1" oninput="updateBuckets()"/>
+            <span id="lt-pct-lbl" style="min-width:36px;font-weight:600;text-align:right">60%</span>
+          </div>
+          <div style="font-size:.7rem;color:var(--muted);margin-top:3px">ถือยาว 3yr+ · เน้น growth &amp; dividend</div>
+        </div>
+        <div style="background:var(--card2);border-radius:10px;padding:12px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-weight:600;color:var(--yellow)">⚡ Short-term</span>
+            <span id="st-amt" style="font-weight:700;color:var(--yellow)">$300</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <input type="range" id="st-pct" min="0" max="100" value="30" style="flex:1" oninput="updateBuckets()"/>
+            <span id="st-pct-lbl" style="min-width:36px;font-weight:600;text-align:right">30%</span>
+          </div>
+          <div style="font-size:.7rem;color:var(--muted);margin-top:3px">ถือระยะสั้น · momentum trades</div>
+        </div>
+        <div style="background:var(--card2);border-radius:10px;padding:12px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-weight:600;color:var(--accent)">💵 Cash Reserve</span>
+            <span id="cr-amt" style="font-weight:700;color:var(--accent)">$100</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <input type="range" id="cr-pct" min="0" max="100" value="10" style="flex:1" oninput="updateBuckets()"/>
+            <span id="cr-pct-lbl" style="min-width:36px;font-weight:600;text-align:right">10%</span>
+          </div>
+          <div style="font-size:.7rem;color:var(--muted);margin-top:3px">เงินสำรอง · รอซื้อเมื่อราคา dip</div>
+        </div>
+      </div>
+      <div id="bucket-status" style="display:flex;justify-content:space-between;padding:9px 13px;border-radius:8px;margin-bottom:13px;background:var(--card2);font-size:.85rem">
+        <span>รวมทั้งหมด</span>
+        <span id="bucket-total-pct" style="font-weight:700">100% ✓</span>
+        <span id="bucket-total-amt" style="font-weight:700;color:var(--accent2)">$1,000 allocated</span>
+      </div>
+      <div class="ai-input-group" style="margin-bottom:13px">
+        <label>เป้าหมาย / หมายเหตุ <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+        <textarea id="ai-context" rows="2" placeholder="เช่น ต้องการ dividend, สนใจ NVDA, หลีกเลี่ยง tech มากเกินไป..."></textarea>
+      </div>
+      <button class="btn btn-primary" style="width:100%;padding:11px;font-size:.93rem" onclick="runAIPlanner()">🤖 วิเคราะห์และบอกว่าต้องทำอะไร</button>
+      <div style="margin-top:7px;font-size:.72rem;color:var(--muted);text-align:center">AI จะดึง live technical data ก่อนตอบ (~15 วิ)</div>
     </div>
-    <div class="card"><div class="section-title">AI Recommendation</div><div id="ai-response"><span class="ai-typing">Enter parameters and click Get AI Recommendation...</span></div></div>
+    <div class="card" style="min-height:340px">
+      <div class="section-title">AI Action Plan</div>
+      <div id="ai-response" style="font-size:.84rem;line-height:1.75;white-space:pre-wrap"><span style="color:var(--muted);font-style:italic">ใส่จำนวนเงินและสัดส่วน แล้วกด Analyze — AI จะบอกว่าต้องซื้อ/ขายอะไร เท่าไหร่ แต่ละก้อน</span></div>
+    </div>
   </div>
-  <div class="card"><div class="section-title">Suggested Allocation</div><div class="chart-wrap-lg"><canvas id="plannerChart"></canvas></div></div>
 </div>
 
 <!-- WATCHLIST -->
@@ -265,6 +317,7 @@ const holdings=[
 ];
 let extraWatch=JSON.parse(localStorage.getItem('pai_watch')||'[]');
 let watchSignals={};
+let watchPrices={};
 let transactions=JSON.parse(localStorage.getItem('pai_txns')||'[]');
 const divData=[
   {ticker:'SCHD',name:'Schwab Dividend ETF',shares:4.0511,div:0.2535,freq:'Q',nextDate:'2026-06-20'},
@@ -287,7 +340,7 @@ function setCurrency(c){
   document.querySelectorAll('.cur-btn').forEach(b=>b.classList.toggle('active',b.textContent===c));
   const sym=c==='THB'?'THB':'USD';
   document.getElementById('deposit-label').textContent=`Monthly Deposit (${sym})`;
-  renderDashboard();renderDividends();renderWatchCards();renderTransactions();renderPlanChart();
+  renderDashboard();renderDividends();renderWatchCards();renderTransactions();renderPlanChart();updateBuckets();
 }
 function fmt(usd){
   if(currency==='THB')return '฿'+(usd*USD_THB).toLocaleString('en',{maximumFractionDigits:0});
@@ -364,7 +417,7 @@ function renderWatchCards(){
   document.getElementById('watchlist-grid').innerHTML=tickers.map(ticker=>{
     const h=holdings.find(x=>x.ticker===ticker);
     const sig=watchSignals[ticker];
-    const price=h?h.price:null;
+    const price=h?h.price:(watchPrices[ticker]||null);
     const chg=h?((h.price-h.cost)/h.cost*100):null;
     const isHeld=!!h;
     const sc=sig?.signal==='BUY'?'badge-buy':sig?.signal==='SELL'?'badge-sell':'badge-hold';
@@ -395,14 +448,22 @@ async function loadSignals(){
     document.getElementById('watch-sub').textContent=`Signals loaded · ${new Date().toLocaleTimeString()}`;
   }catch(e){document.getElementById('watch-sub').textContent='Signal load failed: '+e.message;}
 }
-function addWatchFromInput(){
+async function addWatchFromInput(){
   const t=document.getElementById('watch-add-input').value.trim().toUpperCase();
   if(!t)return;
   if(!getAllWatch().includes(t)){extraWatch.push(t);saveWatch();}
   document.getElementById('watch-add-input').value='';
   document.getElementById('watch-ac').style.display='none';
+  // fetch live price if not already in holdings
+  if(!holdings.find(h=>h.ticker===t)){
+    try{
+      const res=await fetch(`https://my-stock-bot-kuim.onrender.com/api/live-prices?tickers=${t}`);
+      const data=await res.json();
+      if(data.ok&&data.prices[t]) watchPrices[t]=data.prices[t];
+    }catch(e){}
+  }
   renderWatchCards();
-  fetchOneSig(ticker);
+  fetchOneSig(t);
 }
 async function fetchOneSig(ticker){
   try{
@@ -447,36 +508,50 @@ function addToWatch(t){
 
 // ── AI PLANNER ──
 let planCI;
-function initPlanner(){
-  const w=document.getElementById('alloc-sliders');w.innerHTML='';
-  Object.entries(allocTargets).forEach(([t,p])=>{
-    w.innerHTML+=`<div class="alloc-row"><span class="alloc-label">${t}</span>
-      <input type="range" min="0" max="100" value="${p}" oninput="updAlloc('${t}',this.value)" id="sl-${t}"/>
-      <span class="alloc-pct" id="pct-${t}">${p}%</span></div>`;
-  });
-  updAllocTotal();renderPlanChart();
-}
-function updAlloc(t,v){allocTargets[t]=parseInt(v);document.getElementById('pct-'+t).textContent=v+'%';updAllocTotal();renderPlanChart();}
-function updAllocTotal(){const tot=Object.values(allocTargets).reduce((a,b)=>a+b,0);const el=document.getElementById('alloc-status');el.textContent=`Total: ${tot}%${tot===100?' ✓':' ⚠️'}`;el.className='alloc-total '+(tot===100?'alloc-ok':'alloc-bad');}
-function renderPlanChart(){
-  const dep=parseFloat(document.getElementById('monthly-deposit')?.value)||1000;
-  const labels=Object.keys(allocTargets),vals=labels.map(k=>dep*allocTargets[k]/100);
-  if(planCI)planCI.destroy();
-  planCI=new Chart(document.getElementById('plannerChart'),{type:'bar',data:{labels,datasets:[{label:'Allocation',data:vals,backgroundColor:['#6c63ff','#00d4aa','#ff4d6d','#ffd166'],borderRadius:8}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8892a4'},grid:{display:false}},y:{ticks:{color:'#8892a4',callback:v=>fmt(v)},grid:{color:'#2a2f45'}}}}});
+function initPlanner(){updateBuckets();}
+function renderPlanChart(){}
+function updateBuckets(){
+  const dep=parseFloat(document.getElementById('monthly-deposit')?.value)||0;
+  const lt=parseInt(document.getElementById('lt-pct')?.value||60);
+  const st=parseInt(document.getElementById('st-pct')?.value||30);
+  const cr=parseInt(document.getElementById('cr-pct')?.value||10);
+  const tot=lt+st+cr;
+  document.getElementById('lt-pct-lbl').textContent=lt+'%';
+  document.getElementById('st-pct-lbl').textContent=st+'%';
+  document.getElementById('cr-pct-lbl').textContent=cr+'%';
+  document.getElementById('lt-amt').textContent=fmt(dep*lt/100);
+  document.getElementById('st-amt').textContent=fmt(dep*st/100);
+  document.getElementById('cr-amt').textContent=fmt(dep*cr/100);
+  const ok=tot===100;
+  document.getElementById('bucket-total-pct').textContent=tot+'%'+(ok?' ✓':' ⚠️ ต้องรวม 100%');
+  document.getElementById('bucket-total-pct').style.color=ok?'var(--green)':'var(--red)';
+  document.getElementById('bucket-total-amt').textContent=fmt(dep*(tot/100))+' allocated';
+  document.getElementById('bucket-status').style.background=ok?'#00d4aa18':'#ff4d6d18';
 }
 async function runAIPlanner(){
-  const tot=Object.values(allocTargets).reduce((a,b)=>a+b,0);
-  if(tot!==100){alert('Allocation must equal 100%');return;}
-  const dep=document.getElementById('monthly-deposit').value;
+  const dep=parseFloat(document.getElementById('monthly-deposit').value)||0;
+  if(!dep){alert('กรุณาใส่จำนวนเงินก่อน');return;}
+  const lt=parseInt(document.getElementById('lt-pct').value);
+  const st=parseInt(document.getElementById('st-pct').value);
+  const cr=parseInt(document.getElementById('cr-pct').value);
+  if(lt+st+cr!==100){alert('สัดส่วนรวมต้องเท่ากับ 100% ครับ');return;}
   const el=document.getElementById('ai-response');
-  el.innerHTML='<span class="spinner"></span><span style="color:var(--muted);font-style:italic">Analyzing...</span>';
-  const port=holdings.map(h=>`${h.ticker}(${h.type}) ${h.shares}sh@$${h.price}`).join(', ');
-  const alloc=Object.entries(allocTargets).map(([k,v])=>`${k}:${v}%`).join(', ');
+  el.innerHTML='<span class="spinner"></span><span style="color:var(--muted);font-style:italic">⏳ กำลังดึง live technical data... (~15 วิ)</span>';
   try{
-    const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:`Investment advisor. Portfolio: ${port}. Deposit: $${dep}. Target: ${alloc}. Growth: ${document.getElementById('target-growth').value}%. Risk: ${document.getElementById('risk-level').value}. Context: ${document.getElementById('ai-context').value||'none'}. Provide: 1)allocation breakdown 2)growth assessment 3)rebalancing tips 4)2-3 asset picks. Bullet points, concise.`}]})});
+    const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/ai-plan',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        deposit:dep,
+        buckets:{longterm:{pct:lt,amount:dep*lt/100},shortterm:{pct:st,amount:dep*st/100},cash:{pct:cr,amount:dep*cr/100}},
+        risk:document.getElementById('risk-level').value,
+        goals:document.getElementById('ai-context').value||'',
+        watchlist:extraWatch
+      })
+    });
     const data=await res.json();
-    el.textContent=data.content?.find(b=>b.type==='text')?.text||'No response.';
-  }catch(e){el.textContent='Error: '+e.message;}
+    if(data.ok) el.textContent=data.plan;
+    else el.innerHTML=`<span style="color:var(--red)">Error: ${data.error}</span>`;
+  }catch(e){el.innerHTML=`<span style="color:var(--red)">Error: ${e.message}</span>`;}
 }
 
 // ── OCR ──
