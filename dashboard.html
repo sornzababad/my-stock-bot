@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>PortfolioAI Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{--bg:#0f1117;--card:#1a1d2e;--card2:#22263a;--accent:#6c63ff;--accent2:#00d4aa;--red:#ff4d6d;--green:#00d4aa;--yellow:#ffd166;--text:#e2e8f0;--muted:#8892a4;--border:#2a2f45;--radius:12px;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;}
+  nav{display:flex;align-items:center;gap:6px;padding:0 20px;height:58px;background:var(--card);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;flex-wrap:wrap;}
+  .nav-logo{font-weight:700;font-size:1.05rem;color:var(--accent);margin-right:12px;white-space:nowrap;}
+  .nav-logo span{color:var(--accent2);}
+  .nav-btn{padding:7px 13px;border-radius:8px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:.82rem;transition:.2s;white-space:nowrap;}
+  .nav-btn.active,.nav-btn:hover{background:var(--accent);color:#fff;}
+  .nav-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+  .currency-toggle{display:flex;background:var(--card2);border-radius:8px;overflow:hidden;}
+  .cur-btn{padding:5px 11px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:.78rem;transition:.2s;}
+  .cur-btn.active{background:var(--accent);color:#fff;}
+  .page{display:none;padding:22px;max-width:1400px;margin:0 auto;}
+  .page.active{display:block;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;}
+  .card h3{font-size:.8rem;color:var(--muted);margin-bottom:7px;text-transform:uppercase;letter-spacing:.05em;}
+  .stat-val{font-size:1.5rem;font-weight:700;}
+  .stat-sub{font-size:.78rem;color:var(--muted);margin-top:3px;}
+  .pos{color:var(--green);}.neg{color:var(--red);}.neutral{color:var(--yellow);}
+  .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;}
+  .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px;}
+  @media(max-width:900px){.grid-4{grid-template-columns:1fr 1fr;}.grid-2,.grid-3{grid-template-columns:1fr;}}
+  table{width:100%;border-collapse:collapse;font-size:.83rem;}
+  th{padding:9px 11px;text-align:left;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);font-size:.72rem;text-transform:uppercase;}
+  td{padding:9px 11px;border-bottom:1px solid var(--border);}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:var(--card2);}
+  .badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:.7rem;font-weight:600;}
+  .badge-buy{background:#00d4aa22;color:var(--green);}
+  .badge-sell{background:#ff4d6d22;color:var(--red);}
+  .badge-hold{background:#ffd16622;color:var(--yellow);}
+  .badge-etf{background:#6c63ff22;color:#a89cff;}
+  .badge-stock{background:#00d4aa22;color:var(--green);}
+  .badge-fund{background:#ffd16622;color:var(--yellow);}
+  .badge-crypto{background:#ff4d6d22;color:#ff8fa3;}
+  .chart-wrap{position:relative;height:210px;}
+  .chart-wrap-lg{position:relative;height:280px;}
+  .ai-input-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:flex-end;}
+  .ai-input-group{display:flex;flex-direction:column;gap:5px;}
+  .ai-input-group label{font-size:.76rem;color:var(--muted);}
+  input[type=number],input[type=text],select,textarea{background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 11px;font-size:.83rem;outline:none;}
+  input:focus,select:focus,textarea:focus{border-color:var(--accent);}
+  textarea{width:100%;min-height:75px;resize:vertical;font-family:inherit;}
+  .btn{padding:9px 18px;border-radius:8px;border:none;cursor:pointer;font-size:.83rem;font-weight:600;transition:.2s;}
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-primary:hover{background:#7c75ff;}
+  .btn-secondary{background:var(--card2);color:var(--text);border:1px solid var(--border);}
+  .btn-secondary:hover{border-color:var(--accent);color:var(--accent);}
+  .btn-sm{padding:5px 11px;font-size:.76rem;}
+  .btn-danger{background:#ff4d6d22;color:var(--red);border:1px solid #ff4d6d44;}
+  .alloc-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .alloc-label{width:75px;font-size:.8rem;}
+  input[type=range]{flex:1;accent-color:var(--accent);}
+  .alloc-pct{width:44px;text-align:right;font-size:.8rem;font-weight:600;color:var(--accent);}
+  .alloc-total{font-size:.8rem;padding:7px 11px;border-radius:8px;margin-bottom:14px;}
+  .alloc-ok{background:#00d4aa22;color:var(--green);}
+  .alloc-bad{background:#ff4d6d22;color:var(--red);}
+  #ai-response{background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-top:14px;min-height:55px;font-size:.86rem;line-height:1.6;white-space:pre-wrap;}
+  .ai-typing{color:var(--muted);font-style:italic;}
+  .div-upcoming{display:flex;flex-direction:column;gap:7px;}
+  .div-item{display:flex;justify-content:space-between;align-items:center;background:var(--card2);border-radius:8px;padding:9px 13px;}
+  .div-ticker{font-weight:700;font-size:.88rem;}
+  .div-date{font-size:.75rem;color:var(--muted);}
+  .div-amt{font-weight:600;color:var(--green);}
+  .watch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;}
+  .watch-card{background:var(--card2);border:1px solid var(--border);border-radius:var(--radius);padding:15px;}
+  .watch-card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px;}
+  .watch-ticker{font-weight:700;font-size:.98rem;}
+  .watch-name{font-size:.73rem;color:var(--muted);margin-bottom:5px;}
+  .watch-price{font-size:1.15rem;font-weight:700;margin-bottom:3px;}
+  .watch-reason{font-size:.73rem;color:var(--muted);margin-top:7px;line-height:1.4;}
+  .autocomplete-wrap{position:relative;}
+  .autocomplete-list{position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;z-index:200;max-height:180px;overflow-y:auto;box-shadow:0 8px 24px #0006;}
+  .autocomplete-item{padding:8px 12px;cursor:pointer;font-size:.83rem;display:flex;justify-content:space-between;}
+  .autocomplete-item:hover{background:var(--accent);color:#fff;}
+  .autocomplete-item span{font-size:.72rem;color:var(--muted);}
+  .autocomplete-item:hover span{color:#ffffffaa;}
+  .ocr-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:28px;text-align:center;cursor:pointer;transition:.2s;margin-bottom:14px;}
+  .ocr-zone:hover{border-color:var(--accent);}
+  .ocr-zone input{display:none;}
+  .ocr-icon{font-size:2rem;margin-bottom:8px;}
+  .ocr-label{font-size:.85rem;color:var(--muted);}
+  .ocr-preview{max-width:100%;max-height:200px;border-radius:8px;margin-bottom:12px;display:none;}
+  .ocr-result{background:var(--card2);border-radius:8px;padding:12px;font-size:.82rem;margin-bottom:12px;display:none;white-space:pre-wrap;}
+  .txn-form{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;}
+  .page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:8px;}
+  .page-title{font-size:1.15rem;font-weight:700;}
+  .page-sub{font-size:.78rem;color:var(--muted);margin-top:2px;}
+  .risk-low{color:var(--green);}.risk-med{color:var(--yellow);}.risk-high{color:var(--red);}
+  ::-webkit-scrollbar{width:5px;height:5px;}
+  ::-webkit-scrollbar-track{background:var(--bg);}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+  .section-title{font-size:.92rem;font-weight:600;margin-bottom:12px;}
+  .divider{border:none;border-top:1px solid var(--border);margin:16px 0;}
+  .rebal-alert{background:#ffd16614;border:1px solid #ffd16644;border-radius:8px;padding:11px 14px;margin-bottom:14px;font-size:.83rem;color:var(--yellow);}
+  .info-box{background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:.8rem;color:var(--muted);margin-bottom:12px;}
+  .spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .gs-status{font-size:.75rem;padding:4px 10px;border-radius:6px;border:1px solid var(--border);color:var(--muted);}
+  .gs-ok{border-color:#00d4aa44;color:var(--green);background:#00d4aa11;}
+  .price-mock{font-size:.68rem;background:#ffd16622;color:var(--yellow);padding:1px 5px;border-radius:4px;margin-left:4px;}
+</style>
+</head>
+<body>
+<nav>
+  <div class="nav-logo">Portfolio<span>AI</span></div>
+  <button class="nav-btn active" onclick="showPage('dashboard',this)">📊 Dashboard</button>
+  <button class="nav-btn" onclick="showPage('planner',this)">🤖 AI Planner</button>
+  <button class="nav-btn" onclick="showPage('watchlist',this)">👀 Watchlist</button>
+  <button class="nav-btn" onclick="showPage('transactions',this)">📒 Transactions</button>
+  <button class="nav-btn" onclick="showPage('dividends',this)">💰 Dividends</button>
+  <div class="nav-right">
+    <span class="gs-status gs-ok" id="gs-status">⬤ Sheets</span>
+    <div class="currency-toggle">
+      <button class="cur-btn active" onclick="setCurrency('USD')">USD</button>
+      <button class="cur-btn" onclick="setCurrency('THB')">THB</button>
+    </div>
+  </div>
+</nav>
+
+<!-- DASHBOARD -->
+<div id="page-dashboard" class="page active">
+  <div class="page-header">
+    <div><div class="page-title">Portfolio Dashboard</div><div class="page-sub" id="dash-updated">mock prices · push ↻ to refresh</div></div>
+    <button class="btn btn-secondary btn-sm" onclick="refreshAll()">↻ Refresh</button>
+  </div>
+  <div class="grid-4">
+    <div class="card"><h3>Total Value</h3><div class="stat-val" id="stat-total">—</div><div class="stat-sub">All holdings</div></div>
+    <div class="card"><h3>Unrealized P&L</h3><div class="stat-val" id="stat-unreal">—</div><div class="stat-sub">Open positions</div></div>
+    <div class="card"><h3>Realized P&L</h3><div class="stat-val pos">+$0.00</div><div class="stat-sub">Closed trades (YTD)</div></div>
+    <div class="card"><h3>Day Change</h3><div class="stat-val" id="stat-day">—</div><div class="stat-sub">vs yesterday</div></div>
+  </div>
+  <div class="rebal-alert" id="rebal-alert"></div>
+  <div class="grid-2">
+    <div class="card"><div class="section-title">Allocation by Asset Type</div><div class="chart-wrap"><canvas id="allocChart"></canvas></div></div>
+    <div class="card"><div class="section-title">Portfolio Performance (6M)</div><div class="chart-wrap"><canvas id="perfChart"></canvas></div></div>
+  </div>
+  <div class="card"><div class="section-title">Holdings Overview</div>
+    <table><thead><tr><th>Ticker</th><th>Name</th><th>Type</th><th>Shares</th><th>Avg Cost</th><th>Current</th><th>Value</th><th>P&L</th><th>Weight</th><th>Risk</th></tr></thead>
+    <tbody id="holdings-table"></tbody></table>
+  </div>
+</div>
+
+<!-- AI PLANNER -->
+<div id="page-planner" class="page">
+  <div class="page-header"><div><div class="page-title">AI Investment Planner</div><div class="page-sub">Powered by Claude AI</div></div></div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="section-title">Parameters</div>
+      <div class="ai-input-row">
+        <div class="ai-input-group"><label>Monthly Deposit (USD)</label><input type="number" id="monthly-deposit" value="1000" style="width:130px"/></div>
+        <div class="ai-input-group"><label>Target Growth (%/yr)</label><input type="number" id="target-growth" value="8" style="width:90px"/></div>
+        <div class="ai-input-group"><label>Risk</label><select id="risk-level" style="width:115px"><option value="conservative">Conservative</option><option value="moderate" selected>Moderate</option><option value="aggressive">Aggressive</option></select></div>
+      </div>
+      <hr class="divider"/>
+      <div class="section-title">Target Allocation</div>
+      <div id="alloc-sliders"></div>
+      <div class="alloc-total" id="alloc-status"></div>
+      <div class="ai-input-group" style="margin-bottom:11px"><label>Additional context</label><textarea id="ai-context" placeholder="e.g. Focus on dividend stocks this month..."></textarea></div>
+      <button class="btn btn-primary" onclick="runAIPlanner()">🤖 Get AI Recommendation</button>
+    </div>
+    <div class="card"><div class="section-title">AI Recommendation</div><div id="ai-response"><span class="ai-typing">Enter parameters and click Get AI Recommendation...</span></div></div>
+  </div>
+  <div class="card"><div class="section-title">Suggested Allocation</div><div class="chart-wrap-lg"><canvas id="plannerChart"></canvas></div></div>
+</div>
+
+<!-- WATCHLIST -->
+<div id="page-watchlist" class="page">
+  <div class="page-header">
+    <div><div class="page-title">Watchlist</div><div class="page-sub" id="watch-sub">AI signals load on open</div></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="autocomplete-wrap">
+        <input type="text" id="watch-add-input" placeholder="Search ticker..." style="width:190px" oninput="tickerAC(this,'watch-ac')" onkeydown="acKey(event,'watch-ac')"/>
+        <div class="autocomplete-list" id="watch-ac" style="display:none"></div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="addWatchFromInput()">+ Add</button>
+      <button class="btn btn-secondary btn-sm" onclick="refreshSignals()">↻ Signals</button>
+    </div>
+  </div>
+  <div class="watch-grid" id="watchlist-grid"></div>
+</div>
+
+<!-- TRANSACTIONS -->
+<div id="page-transactions" class="page">
+  <div class="page-header"><div><div class="page-title">Transactions</div><div class="page-sub">Synced with Google Sheets</div></div></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="section-title">📸 Import via Screenshot (AI OCR)</div>
+    <div class="ocr-zone" onclick="document.getElementById('ocr-file').click()">
+      <input type="file" id="ocr-file" accept="image/*" onchange="handleOCR(event)"/>
+      <div class="ocr-icon">📷</div>
+      <div class="ocr-label">Click to upload transaction screenshot<br/><span style="font-size:.75rem">รองรับ Dime!, broker confirmations ทุกแบบ</span></div>
+    </div>
+    <img id="ocr-preview" class="ocr-preview"/>
+    <div id="ocr-status"></div>
+    <div id="ocr-result" class="ocr-result"></div>
+    <button id="ocr-apply-btn" class="btn btn-primary btn-sm" style="display:none" onclick="applyOCR()">✓ Apply to Form</button>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="section-title">Record New Transaction</div>
+    <div class="txn-form">
+      <div class="ai-input-group"><label>Date</label><input type="text" id="txn-date" placeholder="2026-04-29" style="width:115px"/></div>
+      <div class="ai-input-group"><label>Type</label><select id="txn-type" style="width:85px"><option>BUY</option><option>SELL</option></select></div>
+      <div class="ai-input-group"><label>Ticker</label>
+        <div class="autocomplete-wrap">
+          <input type="text" id="txn-ticker" placeholder="AAPL" style="width:90px" oninput="tickerAC(this,'txn-ac')" onkeydown="acKey(event,'txn-ac')"/>
+          <div class="autocomplete-list" id="txn-ac" style="display:none"></div>
+        </div>
+      </div>
+      <div class="ai-input-group"><label>Shares</label><input type="number" id="txn-shares" placeholder="10" style="width:80px"/></div>
+      <div class="ai-input-group"><label>Price</label><input type="number" id="txn-price" placeholder="185.50" style="width:95px"/></div>
+      <div class="ai-input-group"><label>Fees</label><input type="number" id="txn-fees" placeholder="0" style="width:70px"/></div>
+      <div class="ai-input-group"><label>Notes</label><input type="text" id="txn-notes" placeholder="Optional" style="width:130px"/></div>
+      <button class="btn btn-primary" onclick="addTransaction()">+ Add</button>
+    </div>
+    <div class="info-box">📌 ข้อมูลบันทึกใน <b>Google Sheets</b> tab <b>DashboardTransactions</b> และ localStorage ครับ</div>
+  </div>
+  <div class="card"><div class="section-title">Transaction History</div>
+    <table><thead><tr><th>Date</th><th>Type</th><th>Ticker</th><th>Shares</th><th>Price</th><th>Total</th><th>Fees</th><th>Notes</th><th>Sync</th><th></th></tr></thead>
+    <tbody id="txn-table"></tbody></table>
+  </div>
+</div>
+
+<!-- DIVIDENDS -->
+<div id="page-dividends" class="page">
+  <div class="page-header"><div><div class="page-title">Dividend Tracker</div></div></div>
+  <div class="grid-3">
+    <div class="card"><h3>Annual Est. Income</h3><div class="stat-val pos" id="div-annual">—</div></div>
+    <div class="card"><h3>Monthly Average</h3><div class="stat-val" id="div-monthly">—</div></div>
+    <div class="card"><h3>Yield on Cost</h3><div class="stat-val neutral" id="div-yield">—</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card"><div class="section-title">Upcoming Dividends</div><div class="div-upcoming" id="div-upcoming"></div></div>
+    <div class="card"><div class="section-title">Annual Income by Asset</div><div class="chart-wrap"><canvas id="divChart"></canvas></div></div>
+  </div>
+</div>
+
+<script>
+const PROXY='https://my-stock-bot-kuim.onrender.com';
+let currency='USD';
+const USD_THB=32.40;
+const allocTargets={ETF:40,Stock:60,Crypto:0,Fund:0};
+let ocrParsed=null,watchAiDone=false;
+
+const holdings=[
+  {ticker:'SCHD',name:'Schwab US Dividend ETF',type:'ETF',shares:4.0511,cost:30.70,price:31.37,risk:'Low'},
+  {ticker:'TSLA',name:'Tesla Inc.',type:'Stock',shares:0.2645,cost:373.30,price:373.41,risk:'High'},
+  {ticker:'AAPL',name:'Apple Inc.',type:'Stock',shares:0.3528,cost:265.496,price:273.52,risk:'Med'},
+];
+let extraWatch=JSON.parse(localStorage.getItem('pai_watch')||'[]');
+let watchSignals={};
+let transactions=JSON.parse(localStorage.getItem('pai_txns')||'[]');
+const divData=[
+  {ticker:'SCHD',name:'Schwab Dividend ETF',shares:4.0511,div:0.2535,freq:'Q',nextDate:'2026-06-20'},
+  {ticker:'AAPL',name:'Apple Inc.',shares:0.3528,div:0.25,freq:'Q',nextDate:'2026-05-16'},
+];
+const TICKERS=[
+  ['AAPL','Apple Inc.'],['AMZN','Amazon'],['MSFT','Microsoft'],['GOOGL','Alphabet'],['META','Meta'],
+  ['NVDA','NVIDIA'],['TSLA','Tesla'],['AMD','AMD'],['NFLX','Netflix'],['INTC','Intel'],
+  ['QQQ','Invesco QQQ'],['SPY','S&P 500 ETF'],['VTI','Vanguard Total Market'],['VOO','Vanguard S&P 500'],
+  ['SCHD','Schwab Dividend ETF'],['GLD','SPDR Gold'],['BTC','Bitcoin ETF'],
+  ['AAL','American Airlines'],['AA','Alcoa'],['MA','Mastercard'],['MU','Micron'],
+  ['CPALL','CP All PCL'],['PTT','PTT PCL'],['AOT','Airports of Thailand'],['KBANK','Kasikorn Bank'],
+];
+
+function saveTxns(){localStorage.setItem('pai_txns',JSON.stringify(transactions));}
+function saveWatch(){localStorage.setItem('pai_watch',JSON.stringify(extraWatch));}
+
+function setCurrency(c){
+  currency=c;
+  document.querySelectorAll('.cur-btn').forEach(b=>b.classList.toggle('active',b.textContent===c));
+  renderDashboard();renderDividends();
+}
+function fmt(usd){
+  if(currency==='THB')return '฿'+(usd*USD_THB).toLocaleString('en',{maximumFractionDigits:0});
+  return '$'+usd.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function showPage(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  if(btn)btn.classList.add('active');
+  if(id==='dashboard')renderDashboard();
+  if(id==='watchlist'&&!watchAiDone){renderWatchCards();loadSignals();}
+  else if(id==='watchlist')renderWatchCards();
+  if(id==='transactions'){loadTxnsFromSheets();renderTransactions();}
+  if(id==='dividends')renderDividends();
+  if(id==='planner')initPlanner();
+}
+
+// ── AUTOCOMPLETE ──
+function tickerAC(inp,lid){
+  const q=inp.value.trim().toUpperCase();
+  const list=document.getElementById(lid);
+  if(q.length<1){list.style.display='none';return;}
+  const m=TICKERS.filter(([t,n])=>t.startsWith(q)||n.toUpperCase().includes(q)).slice(0,8);
+  if(!m.length){list.style.display='none';return;}
+  list.innerHTML=m.map(([t,n])=>`<div class="autocomplete-item" onclick="selTicker('${t}','${lid}','${inp.id}')">${t}<span>${n}</span></div>`).join('');
+  list.style.display='block';
+}
+function selTicker(t,lid,iid){document.getElementById(iid).value=t;document.getElementById(lid).style.display='none';}
+function acKey(e,lid){
+  if(e.key==='Escape')document.getElementById(lid).style.display='none';
+  if(e.key==='Enter'){const s=document.getElementById(lid).querySelector('.autocomplete-item');if(s)s.click();}
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.autocomplete-wrap'))document.querySelectorAll('.autocomplete-list').forEach(l=>l.style.display='none');});
+
+// ── DASHBOARD ──
+let allocCI,perfCI;
+function renderDashboard(){
+  const total=holdings.reduce((s,h)=>s+h.shares*h.price,0);
+  const cost=holdings.reduce((s,h)=>s+h.shares*h.cost,0);
+  const unreal=total-cost;
+  document.getElementById('stat-total').textContent=fmt(total);
+  document.getElementById('stat-unreal').innerHTML=`<span class="${unreal>=0?'pos':'neg'}">${unreal>=0?'+':''}${fmt(unreal)} (${(unreal/cost*100).toFixed(1)}%)</span>`;
+  document.getElementById('stat-day').innerHTML=`<span class="neutral">—</span>`;
+  const typeMap={};
+  holdings.forEach(h=>{typeMap[h.type]=(typeMap[h.type]||0)+h.shares*h.price;});
+  const typeTotal=Object.values(typeMap).reduce((a,b)=>a+b,0);
+  const alerts=[];
+  Object.entries(typeMap).forEach(([t,v])=>{const a=(v/typeTotal*100).toFixed(0),tg=allocTargets[t]||0;if(Math.abs(a-tg)>8)alerts.push(`${t}: actual ${a}% vs target ${tg}%`);});
+  document.getElementById('rebal-alert').innerHTML=alerts.length?'⚠️ Rebalancing Alert: '+alerts.join(' · '):'✅ Portfolio within target allocation.';
+  const tb=document.getElementById('holdings-table');tb.innerHTML='';
+  holdings.forEach(h=>{
+    const val=h.shares*h.price,pl=h.shares*(h.price-h.cost),pct=(h.price-h.cost)/h.cost*100,w=(val/total*100).toFixed(1);
+    const rc=h.risk==='Low'?'risk-low':h.risk==='Med'?'risk-med':'risk-high';
+    tb.innerHTML+=`<tr><td><b>${h.ticker}</b></td><td style="color:var(--muted);font-size:.8rem">${h.name}</td>
+      <td><span class="badge badge-${h.type.toLowerCase()}">${h.type}</span></td>
+      <td>${h.shares}</td><td>${fmt(h.cost)}</td>
+      <td>${fmt(h.price)}<span class="price-mock">mock</span></td>
+      <td>${fmt(val)}</td><td class="${pl>=0?'pos':'neg'}">${pl>=0?'+':''}${fmt(pl)} (${pct.toFixed(1)}%)</td>
+      <td>${w}%</td><td class="${rc}">${h.risk}</td></tr>`;
+  });
+  const labels=Object.keys(typeMap),vals=Object.values(typeMap),colors=['#6c63ff','#00d4aa','#ffd166','#ff4d6d'];
+  if(allocCI)allocCI.destroy();
+  allocCI=new Chart(document.getElementById('allocChart'),{type:'doughnut',data:{labels,datasets:[{data:vals,backgroundColor:colors,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#8892a4',boxWidth:11}}}}});
+  const months=['Nov','Dec','Jan','Feb','Mar','Apr'],perf=[280,295,305,310,315,322.61];
+  if(perfCI)perfCI.destroy();
+  perfCI=new Chart(document.getElementById('perfChart'),{type:'line',data:{labels:months,datasets:[{label:'Value',data:perf,borderColor:'#6c63ff',backgroundColor:'#6c63ff22',fill:true,tension:.4,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8892a4'},grid:{color:'#2a2f45'}},y:{ticks:{color:'#8892a4',callback:v=>'$'+v},grid:{color:'#2a2f45'}}}}});
+}
+
+// ── WATCHLIST ──
+function getAllWatch(){return [...new Set([...holdings.map(h=>h.ticker),...extraWatch])];}
+function renderWatchCards(){
+  const tickers=getAllWatch();
+  document.getElementById('watchlist-grid').innerHTML=tickers.map(ticker=>{
+    const h=holdings.find(x=>x.ticker===ticker);
+    const sig=watchSignals[ticker];
+    const price=h?h.price:null;
+    const chg=h?((h.price-h.cost)/h.cost*100):null;
+    const isHeld=!!h;
+    const sc=sig?.signal==='BUY'?'badge-buy':sig?.signal==='SELL'?'badge-sell':'badge-hold';
+    return `<div class="watch-card">
+      <div class="watch-card-top">
+        <div><div class="watch-ticker">${ticker}${isHeld?` <span style="font-size:.65rem;color:var(--accent)">●held</span>`:''}</div>
+        <div class="watch-name">${h?.name||ticker}</div></div>
+        <span class="badge ${sc}" id="wsig-${ticker}">${sig?.signal||'⏳'}</span>
+      </div>
+      ${price!==null?`<div class="watch-price">${fmt(price)}<span class="price-mock">mock</span></div>
+      <div style="font-size:.8rem" class="${chg>=0?'pos':'neg'}">${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(2)}% vs cost</div>`:'<div class="watch-price" style="color:var(--muted)">—</div>'}
+      <div class="watch-reason" id="wreason-${ticker}">${sig?.reason||'<span style="color:var(--muted);font-style:italic">Analyzing...</span>'}</div>
+      ${!isHeld?`<button class="btn btn-danger btn-sm" style="margin-top:9px;width:100%" onclick="removeWatch('${ticker}')">Remove</button>`:''}
+    </div>`;
+  }).join('');
+}
+async function loadSignals(){
+  document.getElementById('watch-sub').textContent='🤖 AI analyzing signals...';
+  const tickers=getAllWatch();
+  const hs=holdings.map(h=>`${h.ticker}:$${h.price}(cost$${h.cost})`).join(',');
+  const prompt=`Analyze these tickers: ${tickers.join(',')}. Context: ${hs}. Respond ONLY with JSON array, no markdown: [{"ticker":"X","signal":"BUY|SELL|HOLD","reason":"1 sentence with key indicator"}]`;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const text=data.content?.find(b=>b.type==='text')?.text||'[]';
+    JSON.parse(text.replace(/```json|```/g,'').trim()).forEach(item=>{watchSignals[item.ticker]={signal:item.signal,reason:item.reason};});
+    watchAiDone=true;renderWatchCards();
+    document.getElementById('watch-sub').textContent=`Signals loaded · ${new Date().toLocaleTimeString()}`;
+  }catch(e){document.getElementById('watch-sub').textContent='Signal load failed: '+e.message;}
+}
+function addWatchFromInput(){
+  const t=document.getElementById('watch-add-input').value.trim().toUpperCase();
+  if(!t)return;
+  if(!getAllWatch().includes(t)){extraWatch.push(t);saveWatch();}
+  document.getElementById('watch-add-input').value='';
+  document.getElementById('watch-ac').style.display='none';
+  renderWatchCards();
+  fetchOneSig(ticker);
+}
+async function fetchOneSig(ticker){
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:150,messages:[{role:'user',content:`Signal for ${ticker}. JSON only: {"ticker":"${ticker}","signal":"BUY|SELL|HOLD","reason":"1 sentence"}`}]})});
+    const data=await res.json();
+    const obj=JSON.parse(data.content?.find(b=>b.type==='text')?.text.replace(/```json|```/g,'').trim()||'{}');
+    watchSignals[ticker]={signal:obj.signal||'HOLD',reason:obj.reason||''};
+    renderWatchCards();
+  }catch(e){}
+}
+function removeWatch(t){extraWatch=extraWatch.filter(x=>x!==t);saveWatch();delete watchSignals[t];renderWatchCards();}
+function refreshSignals(){watchSignals={};watchAiDone=false;renderWatchCards();loadSignals();}
+
+// ── AI PLANNER ──
+let planCI;
+function initPlanner(){
+  const w=document.getElementById('alloc-sliders');w.innerHTML='';
+  Object.entries(allocTargets).forEach(([t,p])=>{
+    w.innerHTML+=`<div class="alloc-row"><span class="alloc-label">${t}</span>
+      <input type="range" min="0" max="100" value="${p}" oninput="updAlloc('${t}',this.value)" id="sl-${t}"/>
+      <span class="alloc-pct" id="pct-${t}">${p}%</span></div>`;
+  });
+  updAllocTotal();renderPlanChart();
+}
+function updAlloc(t,v){allocTargets[t]=parseInt(v);document.getElementById('pct-'+t).textContent=v+'%';updAllocTotal();renderPlanChart();}
+function updAllocTotal(){const tot=Object.values(allocTargets).reduce((a,b)=>a+b,0);const el=document.getElementById('alloc-status');el.textContent=`Total: ${tot}%${tot===100?' ✓':' ⚠️'}`;el.className='alloc-total '+(tot===100?'alloc-ok':'alloc-bad');}
+function renderPlanChart(){
+  const dep=parseFloat(document.getElementById('monthly-deposit')?.value)||1000;
+  const labels=Object.keys(allocTargets),vals=labels.map(k=>dep*allocTargets[k]/100);
+  if(planCI)planCI.destroy();
+  planCI=new Chart(document.getElementById('plannerChart'),{type:'bar',data:{labels,datasets:[{label:'Allocation',data:vals,backgroundColor:['#6c63ff','#00d4aa','#ff4d6d','#ffd166'],borderRadius:8}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8892a4'},grid:{display:false}},y:{ticks:{color:'#8892a4',callback:v=>'$'+v},grid:{color:'#2a2f45'}}}}});
+}
+async function runAIPlanner(){
+  const tot=Object.values(allocTargets).reduce((a,b)=>a+b,0);
+  if(tot!==100){alert('Allocation must equal 100%');return;}
+  const dep=document.getElementById('monthly-deposit').value;
+  const el=document.getElementById('ai-response');
+  el.innerHTML='<span class="spinner"></span><span style="color:var(--muted);font-style:italic">Analyzing...</span>';
+  const port=holdings.map(h=>`${h.ticker}(${h.type}) ${h.shares}sh@$${h.price}`).join(', ');
+  const alloc=Object.entries(allocTargets).map(([k,v])=>`${k}:${v}%`).join(', ');
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:`Investment advisor. Portfolio: ${port}. Deposit: $${dep}. Target: ${alloc}. Growth: ${document.getElementById('target-growth').value}%. Risk: ${document.getElementById('risk-level').value}. Context: ${document.getElementById('ai-context').value||'none'}. Provide: 1)allocation breakdown 2)growth assessment 3)rebalancing tips 4)2-3 asset picks. Bullet points, concise.`}]})});
+    const data=await res.json();
+    el.textContent=data.content?.find(b=>b.type==='text')?.text||'No response.';
+  }catch(e){el.textContent='Error: '+e.message;}
+}
+
+// ── OCR ──
+async function handleOCR(event){
+  const file=event.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=async(e)=>{
+    const b64=e.target.result.split(',')[1];
+    const preview=document.getElementById('ocr-preview');preview.src=e.target.result;preview.style.display='block';
+    document.getElementById('ocr-status').innerHTML='<span class="spinner"></span><span style="color:var(--muted);font-size:.83rem">Reading screenshot...</span>';
+    document.getElementById('ocr-result').style.display='none';document.getElementById('ocr-apply-btn').style.display='none';
+    try{
+      const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:'Extract transaction. JSON only no markdown: {"date":"YYYY-MM-DD","type":"BUY or SELL","ticker":"SYMBOL","shares":0,"price":0,"fees":0,"notes":""}'}]}]})});
+      const data=await res.json();
+      ocrParsed=JSON.parse(data.content?.find(b=>b.type==='text')?.text.replace(/```json|```/g,'').trim()||'{}');
+      document.getElementById('ocr-status').textContent='';
+      const r=document.getElementById('ocr-result');r.textContent='Extracted:\n'+JSON.stringify(ocrParsed,null,2);r.style.display='block';
+      document.getElementById('ocr-apply-btn').style.display='inline-block';
+    }catch(err){document.getElementById('ocr-status').innerHTML=`<span style="color:var(--red);font-size:.83rem">Failed: ${err.message}</span>`;}
+  };reader.readAsDataURL(file);
+}
+function applyOCR(){
+  if(!ocrParsed)return;
+  if(ocrParsed.date)document.getElementById('txn-date').value=ocrParsed.date;
+  if(ocrParsed.type)document.getElementById('txn-type').value=ocrParsed.type;
+  if(ocrParsed.ticker)document.getElementById('txn-ticker').value=ocrParsed.ticker;
+  if(ocrParsed.shares)document.getElementById('txn-shares').value=ocrParsed.shares;
+  if(ocrParsed.price)document.getElementById('txn-price').value=ocrParsed.price;
+  if(ocrParsed.fees)document.getElementById('txn-fees').value=ocrParsed.fees;
+  if(ocrParsed.notes)document.getElementById('txn-notes').value=ocrParsed.notes;
+}
+
+// ── TRANSACTIONS ──
+async function syncToSheets(txn){
+  try{const res=await fetch(PROXY+'/api/transaction',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(txn)});return res.ok;}
+  catch(e){return false;}
+}
+async function loadTxnsFromSheets(){
+  try{
+    const res=await fetch(PROXY+'/api/transactions');
+    const data=await res.json();
+    if(data.ok&&data.data.length){
+      transactions=data.data.map(r=>({date:r.Date,type:r.Type,ticker:r.Ticker,shares:r.Shares,price:r.Price,fees:r.Fees,notes:r.Notes,synced:true}));
+      saveTxns();renderTransactions();
+    }
+  }catch(e){}
+}
+function addTransaction(){
+  const d=document.getElementById('txn-date').value||new Date().toISOString().split('T')[0];
+  const type=document.getElementById('txn-type').value;
+  const ticker=document.getElementById('txn-ticker').value.toUpperCase().trim();
+  const shares=parseFloat(document.getElementById('txn-shares').value);
+  const price=parseFloat(document.getElementById('txn-price').value);
+  const fees=parseFloat(document.getElementById('txn-fees').value)||0;
+  const notes=document.getElementById('txn-notes').value;
+  if(!ticker||!shares||!price){alert('กรุณากรอก Ticker, Shares และ Price ครับ');return;}
+  const txn={date:d,type,ticker,shares,price,fees,notes,synced:false};
+  transactions.push(txn);saveTxns();
+  syncToSheets(txn).then(ok=>{if(ok){txn.synced=true;saveTxns();renderTransactions();}});
+  renderTransactions();
+  ['txn-date','txn-ticker','txn-shares','txn-price','txn-fees','txn-notes'].forEach(id=>document.getElementById(id).value='');
+}
+function deleteTxn(i){transactions.splice(i,1);saveTxns();renderTransactions();}
+function renderTransactions(){
+  const tb=document.getElementById('txn-table');tb.innerHTML='';
+  if(!transactions.length){tb.innerHTML='<tr><td colspan="10" style="color:var(--muted);text-align:center;padding:20px">No transactions yet</td></tr>';return;}
+  [...transactions].reverse().forEach((t,ri)=>{
+    const i=transactions.length-1-ri;
+    tb.innerHTML+=`<tr><td>${t.date}</td><td><span class="badge ${t.type==='BUY'?'badge-buy':'badge-sell'}">${t.type}</span></td>
+      <td><b>${t.ticker}</b></td><td>${t.shares}</td><td>${fmt(t.price)}</td><td>${fmt(t.shares*t.price)}</td>
+      <td>${fmt(t.fees||0)}</td><td style="color:var(--muted);font-size:.8rem">${t.notes||'-'}</td>
+      <td>${t.synced?'<span style="color:var(--green);font-size:.75rem">✓ Sheets</span>':'<span style="color:var(--muted);font-size:.75rem">Local</span>'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteTxn(${i})">✕</button></td></tr>`;
+  });
+}
+
+// ── DIVIDENDS ──
+let divCI;
+function renderDividends(){
+  const annual=divData.reduce((s,d)=>{const f=d.freq==='Q'?4:d.freq==='S'?2:1;return s+d.shares*d.div*f;},0);
+  document.getElementById('div-annual').textContent=fmt(annual);
+  document.getElementById('div-monthly').textContent=fmt(annual/12);
+  const tc=holdings.reduce((s,h)=>s+h.shares*h.cost,0);
+  document.getElementById('div-yield').textContent=(annual/tc*100).toFixed(1)+'%';
+  document.getElementById('div-upcoming').innerHTML=divData.map(d=>`
+    <div class="div-item"><div><div class="div-ticker">${d.ticker}</div>
+    <div class="div-date">Ex-date: ${d.nextDate} · ${d.freq==='Q'?'Quarterly':'Semi-annual'}</div></div>
+    <div class="div-amt">+${fmt(d.shares*d.div)}</div></div>`).join('');
+  const labels=divData.map(d=>d.ticker),vals=divData.map(d=>{const f=d.freq==='Q'?4:2;return d.shares*d.div*f;});
+  if(divCI)divCI.destroy();
+  divCI=new Chart(document.getElementById('divChart'),{type:'bar',data:{labels,datasets:[{label:'Annual Income',data:vals,backgroundColor:['#6c63ff','#00d4aa'],borderRadius:8}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8892a4'},grid:{display:false}},y:{ticks:{color:'#8892a4',callback:v=>'$'+v.toFixed(2)},grid:{color:'#2a2f45'}}}}});
+}
+
+function refreshAll(){renderDashboard();renderDividends();}
+
+// ── INIT ──
+renderDashboard();
+renderDividends();
+renderTransactions();
+</script>
+</body>
+</html>
