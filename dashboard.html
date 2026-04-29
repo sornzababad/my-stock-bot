@@ -155,42 +155,75 @@
 
 <!-- AI PLANNER -->
 <div id="page-planner" class="page">
-  <div class="page-header"><div><div class="page-title">AI Investment Planner</div><div class="page-sub">Tell me your deposit — I'll tell you exactly what to buy or sell</div></div></div>
+  <div class="page-header"><div><div class="page-title">AI Investment Planner</div><div class="page-sub">แบ่งเงินฝากเป็น buckets — AI วางแผนให้แต่ละก้อน</div></div></div>
   <div class="grid-2">
     <div class="card">
-      <div class="section-title">Your Deposit This Round</div>
-      <div class="ai-input-row" style="flex-wrap:wrap;gap:14px">
-        <div class="ai-input-group">
-          <label id="deposit-label">Deposit Amount (USD)</label>
-          <input type="number" id="monthly-deposit" value="1000" style="width:150px;font-size:1.1rem;font-weight:700"/>
+      <div class="section-title">เงินฝากรอบนี้</div>
+      <div style="display:flex;align-items:flex-end;gap:12px;margin-bottom:18px">
+        <div class="ai-input-group" style="flex:1">
+          <label id="deposit-label">จำนวนเงิน (USD)</label>
+          <input type="number" id="monthly-deposit" value="1000" style="width:100%;font-size:1.2rem;font-weight:700" oninput="updateBuckets()"/>
         </div>
         <div class="ai-input-group">
-          <label>Risk Tolerance</label>
-          <select id="risk-level" style="width:140px">
+          <label>Risk</label>
+          <select id="risk-level" style="width:130px">
             <option value="conservative">Conservative</option>
             <option value="moderate" selected>Moderate</option>
             <option value="aggressive">Aggressive</option>
           </select>
         </div>
-        <div class="ai-input-group">
-          <label>Time Horizon</label>
-          <select id="time-horizon" style="width:140px">
-            <option value="short-term (under 1 year)">Short (&lt;1yr)</option>
-            <option value="medium-term (1-3 years)">Medium (1-3yr)</option>
-            <option value="long-term (3+ years)" selected>Long (3yr+)</option>
-          </select>
+      </div>
+      <div class="section-title" style="margin-bottom:10px">แบ่งสัดส่วน</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+        <div style="background:var(--card2);border-radius:10px;padding:12px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-weight:600;color:var(--green)">📈 Long-term</span>
+            <span id="lt-amt" style="font-weight:700;color:var(--green)">$600</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <input type="range" id="lt-pct" min="0" max="100" value="60" style="flex:1" oninput="updateBuckets()"/>
+            <span id="lt-pct-lbl" style="min-width:36px;font-weight:600;text-align:right">60%</span>
+          </div>
+          <div style="font-size:.7rem;color:var(--muted);margin-top:3px">ถือยาว 3yr+ · เน้น growth &amp; dividend</div>
+        </div>
+        <div style="background:var(--card2);border-radius:10px;padding:12px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-weight:600;color:var(--yellow)">⚡ Short-term</span>
+            <span id="st-amt" style="font-weight:700;color:var(--yellow)">$300</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <input type="range" id="st-pct" min="0" max="100" value="30" style="flex:1" oninput="updateBuckets()"/>
+            <span id="st-pct-lbl" style="min-width:36px;font-weight:600;text-align:right">30%</span>
+          </div>
+          <div style="font-size:.7rem;color:var(--muted);margin-top:3px">ถือระยะสั้น · momentum trades</div>
+        </div>
+        <div style="background:var(--card2);border-radius:10px;padding:12px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+            <span style="font-weight:600;color:var(--accent)">💵 Cash Reserve</span>
+            <span id="cr-amt" style="font-weight:700;color:var(--accent)">$100</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <input type="range" id="cr-pct" min="0" max="100" value="10" style="flex:1" oninput="updateBuckets()"/>
+            <span id="cr-pct-lbl" style="min-width:36px;font-weight:600;text-align:right">10%</span>
+          </div>
+          <div style="font-size:.7rem;color:var(--muted);margin-top:3px">เงินสำรอง · รอซื้อเมื่อราคา dip</div>
         </div>
       </div>
-      <div class="ai-input-group" style="margin-top:12px;margin-bottom:14px">
-        <label>Your Goals &amp; Notes <span style="color:var(--muted);font-weight:400">(optional — helps AI understand your plan)</span></label>
-        <textarea id="ai-context" rows="3" placeholder="e.g. I want dividend income, avoid tech concentration, interested in adding NVDA this month..."></textarea>
+      <div id="bucket-status" style="display:flex;justify-content:space-between;padding:9px 13px;border-radius:8px;margin-bottom:13px;background:var(--card2);font-size:.85rem">
+        <span>รวมทั้งหมด</span>
+        <span id="bucket-total-pct" style="font-weight:700">100% ✓</span>
+        <span id="bucket-total-amt" style="font-weight:700;color:var(--accent2)">$1,000 allocated</span>
       </div>
-      <button class="btn btn-primary" style="width:100%;padding:12px;font-size:.95rem" onclick="runAIPlanner()">🤖 Analyze &amp; Tell Me What To Do</button>
-      <div style="margin-top:10px;font-size:.75rem;color:var(--muted);text-align:center">AI will fetch live technical data for your holdings + watchlist before answering</div>
+      <div class="ai-input-group" style="margin-bottom:13px">
+        <label>เป้าหมาย / หมายเหตุ <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+        <textarea id="ai-context" rows="2" placeholder="เช่น ต้องการ dividend, สนใจ NVDA, หลีกเลี่ยง tech มากเกินไป..."></textarea>
+      </div>
+      <button class="btn btn-primary" style="width:100%;padding:11px;font-size:.93rem" onclick="runAIPlanner()">🤖 วิเคราะห์และบอกว่าต้องทำอะไร</button>
+      <div style="margin-top:7px;font-size:.72rem;color:var(--muted);text-align:center">AI จะดึง live technical data ก่อนตอบ (~15 วิ)</div>
     </div>
-    <div class="card" style="min-height:300px">
+    <div class="card" style="min-height:340px">
       <div class="section-title">AI Action Plan</div>
-      <div id="ai-response" style="font-size:.85rem;line-height:1.7;white-space:pre-wrap"><span style="color:var(--muted);font-style:italic">Enter your deposit amount and click Analyze. AI will check your portfolio + live technical data and tell you exactly what to buy or sell.</span></div>
+      <div id="ai-response" style="font-size:.84rem;line-height:1.75;white-space:pre-wrap"><span style="color:var(--muted);font-style:italic">ใส่จำนวนเงินและสัดส่วน แล้วกด Analyze — AI จะบอกว่าต้องซื้อ/ขายอะไร เท่าไหร่ แต่ละก้อน</span></div>
     </div>
   </div>
 </div>
@@ -307,7 +340,7 @@ function setCurrency(c){
   document.querySelectorAll('.cur-btn').forEach(b=>b.classList.toggle('active',b.textContent===c));
   const sym=c==='THB'?'THB':'USD';
   document.getElementById('deposit-label').textContent=`Monthly Deposit (${sym})`;
-  renderDashboard();renderDividends();renderWatchCards();renderTransactions();renderPlanChart();
+  renderDashboard();renderDividends();renderWatchCards();renderTransactions();renderPlanChart();updateBuckets();
 }
 function fmt(usd){
   if(currency==='THB')return '฿'+(usd*USD_THB).toLocaleString('en',{maximumFractionDigits:0});
@@ -475,20 +508,42 @@ function addToWatch(t){
 
 // ── AI PLANNER ──
 let planCI;
-function initPlanner(){}
+function initPlanner(){updateBuckets();}
 function renderPlanChart(){}
+function updateBuckets(){
+  const dep=parseFloat(document.getElementById('monthly-deposit')?.value)||0;
+  const lt=parseInt(document.getElementById('lt-pct')?.value||60);
+  const st=parseInt(document.getElementById('st-pct')?.value||30);
+  const cr=parseInt(document.getElementById('cr-pct')?.value||10);
+  const tot=lt+st+cr;
+  document.getElementById('lt-pct-lbl').textContent=lt+'%';
+  document.getElementById('st-pct-lbl').textContent=st+'%';
+  document.getElementById('cr-pct-lbl').textContent=cr+'%';
+  document.getElementById('lt-amt').textContent=fmt(dep*lt/100);
+  document.getElementById('st-amt').textContent=fmt(dep*st/100);
+  document.getElementById('cr-amt').textContent=fmt(dep*cr/100);
+  const ok=tot===100;
+  document.getElementById('bucket-total-pct').textContent=tot+'%'+(ok?' ✓':' ⚠️ ต้องรวม 100%');
+  document.getElementById('bucket-total-pct').style.color=ok?'var(--green)':'var(--red)';
+  document.getElementById('bucket-total-amt').textContent=fmt(dep*(tot/100))+' allocated';
+  document.getElementById('bucket-status').style.background=ok?'#00d4aa18':'#ff4d6d18';
+}
 async function runAIPlanner(){
   const dep=parseFloat(document.getElementById('monthly-deposit').value)||0;
-  if(!dep){alert('Please enter your deposit amount first.');return;}
+  if(!dep){alert('กรุณาใส่จำนวนเงินก่อน');return;}
+  const lt=parseInt(document.getElementById('lt-pct').value);
+  const st=parseInt(document.getElementById('st-pct').value);
+  const cr=parseInt(document.getElementById('cr-pct').value);
+  if(lt+st+cr!==100){alert('สัดส่วนรวมต้องเท่ากับ 100% ครับ');return;}
   const el=document.getElementById('ai-response');
-  el.innerHTML='<span class="spinner"></span><span style="color:var(--muted);font-style:italic">⏳ Fetching live technical data for your portfolio... (~10-15s)</span>';
+  el.innerHTML='<span class="spinner"></span><span style="color:var(--muted);font-style:italic">⏳ กำลังดึง live technical data... (~15 วิ)</span>';
   try{
     const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/ai-plan',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         deposit:dep,
+        buckets:{longterm:{pct:lt,amount:dep*lt/100},shortterm:{pct:st,amount:dep*st/100},cash:{pct:cr,amount:dep*cr/100}},
         risk:document.getElementById('risk-level').value,
-        horizon:document.getElementById('time-horizon').value,
         goals:document.getElementById('ai-context').value||'',
         watchlist:extraWatch
       })

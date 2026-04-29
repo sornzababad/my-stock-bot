@@ -567,9 +567,15 @@ def ai_plan():
         body      = request.json or {}
         deposit   = float(body.get('deposit', 0))
         risk      = body.get('risk', 'moderate')
-        horizon   = body.get('horizon', 'long-term')
         goals     = body.get('goals', '')
         watchlist = body.get('watchlist', [])
+        buckets   = body.get('buckets', {})
+        lt_amt    = buckets.get('longterm',  {}).get('amount', deposit * 0.6)
+        st_amt    = buckets.get('shortterm', {}).get('amount', deposit * 0.3)
+        cr_amt    = buckets.get('cash',      {}).get('amount', deposit * 0.1)
+        lt_pct    = buckets.get('longterm',  {}).get('pct', 60)
+        st_pct    = buckets.get('shortterm', {}).get('pct', 30)
+        cr_pct    = buckets.get('cash',      {}).get('pct', 10)
 
         portfolio = load_portfolio()
         all_tickers = list(portfolio['holdings'].keys()) + [t for t in watchlist if t not in portfolio['holdings']]
@@ -622,18 +628,30 @@ TECHNICAL DATA (live):
 
 WATCHLIST: {watch_text}
 
-NEW DEPOSIT AVAILABLE: ${deposit:.2f}
+DEPOSIT BREAKDOWN:
+  📈 Long-term  ({lt_pct}%): ${lt_amt:.2f}
+  ⚡ Short-term ({st_pct}%): ${st_amt:.2f}
+  💵 Cash Reserve ({cr_pct}%): ${cr_amt:.2f}
+  Total deposit: ${deposit:.2f}
+
 RISK TOLERANCE: {risk}
-TIME HORIZON: {horizon}
 GOALS: {goals or 'Long-term wealth building'}
 
-Tell me EXACTLY what to do with my ${deposit:.2f} deposit. For each action specify:
-- BUY: ticker, dollar amount, approximate shares
-- SELL/TRIM: ticker, reason, how much to reduce
-- HOLD: ticker, why keep
+Give me a SPECIFIC plan for EACH bucket:
 
-Then give a 1-line portfolio health summary.
-Be direct. No disclaimers. I trust your analysis."""
+📈 LONG-TERM (${lt_amt:.2f}):
+- Which ticker(s) to buy, exact dollar amount, approximate shares
+- Why (reference the technical data)
+
+⚡ SHORT-TERM (${st_amt:.2f}):
+- Which ticker(s) to buy for momentum/swing trade
+- Entry price, target price, stop loss
+
+💵 CASH RESERVE (${cr_amt:.2f}):
+- What are you waiting for (which ticker, at what price to buy the dip)
+
+Then 1-line: overall portfolio health check.
+Be direct. Specific numbers. No disclaimers."""
 
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         msg = client.messages.create(
