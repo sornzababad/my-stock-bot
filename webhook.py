@@ -6,7 +6,7 @@ Features:
   • Google Sheets sync
   • TP/SL price alert background thread
 """
-from flask import Flask, request, send_file
+from flask import Flask, request, send_file, jsonify
 import requests, anthropic, yfinance as yf, pandas as pd
 import os, json, re, time, threading
 from users import load_users, add_user, remove_user
@@ -394,6 +394,29 @@ def process_message(text, portfolio):
     return ask_claude_stock(text)
 
 # ── Flask routes ──────────────────────────────────────────────────
+
+@app.route('/api/claude', methods=['POST', 'OPTIONS'])
+def claude_proxy():
+    if request.method == 'OPTIONS':
+        res = jsonify({'ok': True})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        res.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return res
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        body = request.json
+        msg = client.messages.create(
+            model=body.get('model', 'claude-haiku-4-5-20251001'),
+            max_tokens=body.get('max_tokens', 1000),
+            messages=body.get('messages', [])
+        )
+        res = jsonify({'content': [{'type': 'text', 'text': msg.content[0].text}]})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res
+    except Exception as e:
+        res = jsonify({'error': str(e)})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res, 500
 
 @app.route('/', methods=['GET','POST','HEAD','OPTIONS'])
 @app.route('/webhook', methods=['GET','POST','HEAD','OPTIONS'])
