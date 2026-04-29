@@ -556,6 +556,28 @@ def webhook():
             print(f"[ERROR] {e}")
     return 'OK', 200
 
+@app.route('/api/live-prices', methods=['GET', 'OPTIONS'])
+def live_prices():
+    if request.method == 'OPTIONS':
+        res = jsonify({'ok': True})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res
+    try:
+        tickers = request.args.get('tickers', '').upper().split(',')
+        tickers = [t.strip() for t in tickers if t.strip()]
+        prices = {}
+        for ticker in tickers:
+            price = get_current_price(ticker)
+            if price:
+                prices[ticker] = price
+        res = jsonify({'ok': True, 'prices': prices})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res
+    except Exception as e:
+        res = jsonify({'error': str(e)})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res, 500
+
 @app.route('/api/portfolio-data', methods=['GET', 'OPTIONS'])
 def get_portfolio_data():
     if request.method == 'OPTIONS':
