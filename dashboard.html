@@ -377,7 +377,7 @@ async function loadSignals(){
   const hs=holdings.map(h=>`${h.ticker}:$${h.price}(cost$${h.cost})`).join(',');
   const prompt=`Analyze these tickers: ${tickers.join(',')}. Context: ${hs}. Respond ONLY with JSON array, no markdown: [{"ticker":"X","signal":"BUY|SELL|HOLD","reason":"1 sentence with key indicator"}]`;
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,messages:[{role:'user',content:prompt}]})});
+    const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,messages:[{role:'user',content:prompt}]})});
     const data=await res.json();
     const text=data.content?.find(b=>b.type==='text')?.text||'[]';
     JSON.parse(text.replace(/```json|```/g,'').trim()).forEach(item=>{watchSignals[item.ticker]={signal:item.signal,reason:item.reason};});
@@ -396,7 +396,7 @@ function addWatchFromInput(){
 }
 async function fetchOneSig(ticker){
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:150,messages:[{role:'user',content:`Signal for ${ticker}. JSON only: {"ticker":"${ticker}","signal":"BUY|SELL|HOLD","reason":"1 sentence"}`}]})});
+    const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:150,messages:[{role:'user',content:`Signal for ${ticker}. JSON only: {"ticker":"${ticker}","signal":"BUY|SELL|HOLD","reason":"1 sentence"}`}]})});
     const data=await res.json();
     const obj=JSON.parse(data.content?.find(b=>b.type==='text')?.text.replace(/```json|```/g,'').trim()||'{}');
     watchSignals[ticker]={signal:obj.signal||'HOLD',reason:obj.reason||''};
@@ -434,7 +434,7 @@ async function runAIPlanner(){
   const port=holdings.map(h=>`${h.ticker}(${h.type}) ${h.shares}sh@$${h.price}`).join(', ');
   const alloc=Object.entries(allocTargets).map(([k,v])=>`${k}:${v}%`).join(', ');
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:`Investment advisor. Portfolio: ${port}. Deposit: $${dep}. Target: ${alloc}. Growth: ${document.getElementById('target-growth').value}%. Risk: ${document.getElementById('risk-level').value}. Context: ${document.getElementById('ai-context').value||'none'}. Provide: 1)allocation breakdown 2)growth assessment 3)rebalancing tips 4)2-3 asset picks. Bullet points, concise.`}]})});
+    const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:`Investment advisor. Portfolio: ${port}. Deposit: $${dep}. Target: ${alloc}. Growth: ${document.getElementById('target-growth').value}%. Risk: ${document.getElementById('risk-level').value}. Context: ${document.getElementById('ai-context').value||'none'}. Provide: 1)allocation breakdown 2)growth assessment 3)rebalancing tips 4)2-3 asset picks. Bullet points, concise.`}]})});
     const data=await res.json();
     el.textContent=data.content?.find(b=>b.type==='text')?.text||'No response.';
   }catch(e){el.textContent='Error: '+e.message;}
@@ -450,7 +450,7 @@ async function handleOCR(event){
     document.getElementById('ocr-status').innerHTML='<span class="spinner"></span><span style="color:var(--muted);font-size:.83rem">Reading screenshot...</span>';
     document.getElementById('ocr-result').style.display='none';document.getElementById('ocr-apply-btn').style.display='none';
     try{
-      const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:'Extract transaction. JSON only no markdown: {"date":"YYYY-MM-DD","type":"BUY or SELL","ticker":"SYMBOL","shares":0,"price":0,"fees":0,"notes":""}'}]}]})});
+      const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:'Extract transaction. JSON only no markdown: {"date":"YYYY-MM-DD","type":"BUY or SELL","ticker":"SYMBOL","shares":0,"price":0,"fees":0,"notes":""}'}]}]})});
       const data=await res.json();
       ocrParsed=JSON.parse(data.content?.find(b=>b.type==='text')?.text.replace(/```json|```/g,'').trim()||'{}');
       document.getElementById('ocr-status').textContent='';
