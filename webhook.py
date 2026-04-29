@@ -567,11 +567,11 @@ def startup_sync():
     except Exception as e:
         print(f"[STARTUP] Sync failed: {e}")
 
-startup_sync()
+# ── start background threads ──────────────────────────────────────
 
-# ── start alert background thread ────────────────────────────────
-
-alert_thread = threading.Thread(target=check_alerts, daemon=True)
+sync_thread  = threading.Thread(target=startup_sync,  daemon=True)
+alert_thread = threading.Thread(target=check_alerts,  daemon=True)
+sync_thread.start()
 alert_thread.start()
 
 if __name__ == '__main__':
