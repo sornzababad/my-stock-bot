@@ -131,7 +131,10 @@
 <div id="page-dashboard" class="page active">
   <div class="page-header">
     <div><div class="page-title">Portfolio Dashboard</div><div class="page-sub" id="dash-updated">mock prices · push ↻ to refresh</div></div>
-    <button class="btn btn-secondary btn-sm" onclick="refreshAll()">↻ Refresh</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-secondary btn-sm" onclick="refreshAll()">↻ Refresh</button>
+      <button class="btn btn-secondary btn-sm" id="sync-btn" onclick="syncToSheets()" title="Sync portfolio to Google Sheets">📊 Sync Sheets</button>
+    </div>
   </div>
   <div class="grid-4">
     <div class="card"><h3>Total Value</h3><div class="stat-val" id="stat-total">—</div><div class="stat-sub">All holdings</div></div>
@@ -566,6 +569,16 @@ function renderDividends(){
 }
 
 function refreshAll(){renderDashboard();renderDividends();}
+async function syncToSheets(){
+  const btn=document.getElementById('sync-btn');
+  btn.textContent='⏳ Syncing...';btn.disabled=true;
+  try{
+    const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/sync-portfolio',{method:'POST',headers:{'Content-Type':'application/json'}});
+    const data=await res.json();
+    if(data.ok){btn.textContent='✅ Synced!';setTimeout(()=>{btn.textContent='📊 Sync Sheets';btn.disabled=false;},3000);}
+    else throw new Error(data.error||'Failed');
+  }catch(e){btn.textContent='❌ Failed';setTimeout(()=>{btn.textContent='📊 Sync Sheets';btn.disabled=false;},3000);}
+}
 
 // ── INIT ──
 renderDashboard();

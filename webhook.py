@@ -556,6 +556,26 @@ def webhook():
             print(f"[ERROR] {e}")
     return 'OK', 200
 
+@app.route('/api/sync-portfolio', methods=['POST', 'OPTIONS'])
+def sync_portfolio_to_sheets():
+    if request.method == 'OPTIONS':
+        res = jsonify({'ok': True})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        res.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return res
+    try:
+        portfolio = load_portfolio()
+        update_portfolio_sheet(portfolio)
+        if portfolio.get('alerts'):
+            save_alerts_to_sheet(portfolio['alerts'])
+        res = jsonify({'ok': True, 'holdings': len(portfolio.get('holdings', {}))})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res
+    except Exception as e:
+        res = jsonify({'error': str(e)})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res, 500
+
 @app.route('/api/suggest', methods=['GET', 'OPTIONS'])
 def suggest_tickers():
     if request.method == 'OPTIONS':
