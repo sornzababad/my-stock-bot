@@ -6,7 +6,7 @@ Features:
   • Google Sheets sync
   • TP/SL price alert background thread
 """
-from flask import Flask, request
+from flask import Flask, request, send_file
 import requests, anthropic, yfinance as yf, pandas as pd
 import os, json, re, time, threading
 from users import load_users, add_user, remove_user
@@ -397,6 +397,9 @@ def process_message(text, portfolio):
 
 @app.route('/', methods=['GET','POST','HEAD','OPTIONS'])
 @app.route('/webhook', methods=['GET','POST','HEAD','OPTIONS'])
+@app.route('/dashboard')
+def dashboard():
+    return send_file('dashboard.html')
 def webhook():
     if request.method == 'POST':
         try:
