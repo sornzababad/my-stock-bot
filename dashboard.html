@@ -130,7 +130,7 @@
 <!-- DASHBOARD -->
 <div id="page-dashboard" class="page active">
   <div class="page-header">
-    <div><div class="page-title">Portfolio Dashboard</div><div class="page-sub" id="dash-updated">mock prices · push ↻ to refresh</div></div>
+    <div><div class="page-title">Portfolio Dashboard</div><div class="page-sub" id="dash-updated">Loading live prices...</div></div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-secondary btn-sm" onclick="refreshAll()">↻ Refresh</button>
       <button class="btn btn-secondary btn-sm" id="sync-btn" onclick="syncToSheets()" title="Sync portfolio to Google Sheets">📊 Sync Sheets</button>
@@ -345,7 +345,7 @@ function renderDashboard(){
     tb.innerHTML+=`<tr><td><b>${h.ticker}</b></td><td style="color:var(--muted);font-size:.8rem">${h.name}</td>
       <td><span class="badge badge-${h.type.toLowerCase()}">${h.type}</span></td>
       <td>${h.shares}</td><td>${fmt(h.cost)}</td>
-      <td>${fmt(h.price)}<span class="price-mock">mock</span></td>
+      <td>${fmt(h.price)}</td>
       <td>${fmt(val)}</td><td class="${pl>=0?'pos':'neg'}">${pl>=0?'+':''}${fmt(pl)} (${pct.toFixed(1)}%)</td>
       <td>${w}%</td><td class="${rc}">${h.risk}</td></tr>`;
   });
@@ -374,7 +374,7 @@ function renderWatchCards(){
         <div class="watch-name">${h?.name||ticker}</div></div>
         <span class="badge ${sc}" id="wsig-${ticker}">${sig?.signal||'⏳'}</span>
       </div>
-      ${price!==null?`<div class="watch-price">${fmt(price)}<span class="price-mock">mock</span></div>
+      ${price!==null?`<div class="watch-price">${fmt(price)}</div>
       <div style="font-size:.8rem" class="${chg>=0?'pos':'neg'}">${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(2)}% vs cost</div>`:'<div class="watch-price" style="color:var(--muted)">—</div>'}
       <div class="watch-reason" id="wreason-${ticker}">${sig?.reason||'<span style="color:var(--muted);font-style:italic">Analyzing...</span>'}</div>
       ${!isHeld?`<button class="btn btn-danger btn-sm" style="margin-top:9px;width:100%" onclick="removeWatch('${ticker}')">Remove</button>`:''}
@@ -570,7 +570,7 @@ function renderDividends(){
   divCI=new Chart(document.getElementById('divChart'),{type:'bar',data:{labels,datasets:[{label:'Annual Income',data:vals,backgroundColor:['#6c63ff','#00d4aa'],borderRadius:8}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8892a4'},grid:{display:false}},y:{ticks:{color:'#8892a4',callback:v=>'$'+v.toFixed(2)},grid:{color:'#2a2f45'}}}}});
 }
 
-function refreshAll(){renderDashboard();renderDividends();}
+function refreshAll(){renderDashboard();renderDividends();loadLivePrices();}
 async function syncToSheets(){
   const btn=document.getElementById('sync-btn');
   btn.textContent='⏳ Syncing...';btn.disabled=true;
@@ -628,11 +628,28 @@ async function loadHoldingsFromServer(){
   }catch(e){console.log('[holdings] using defaults');}
 }
 
+async function loadLivePrices(){
+  const tickers=[...new Set(holdings.map(h=>h.ticker))];
+  if(!tickers.length)return;
+  document.getElementById('dash-updated').textContent='⏳ Fetching live prices...';
+  try{
+    const res=await fetch(`https://my-stock-bot-kuim.onrender.com/api/live-prices?tickers=${tickers.join(',')}`);
+    const data=await res.json();
+    if(data.ok&&data.prices){
+      let updated=0;
+      holdings.forEach(h=>{if(data.prices[h.ticker]){h.price=data.prices[h.ticker];updated++;}});
+      renderDashboard();renderWatchCards();
+      const now=new Date().toLocaleTimeString();
+      document.getElementById('dash-updated').textContent=`Live prices · updated ${now}`;
+    }
+  }catch(e){document.getElementById('dash-updated').textContent='Live prices unavailable';}
+}
+
 // ── INIT ──
 renderDashboard();
 renderDividends();
 renderTransactions();
-loadHoldingsFromServer();
+loadHoldingsFromServer().then(()=>loadLivePrices());
 </script>
 </body>
 </html>
