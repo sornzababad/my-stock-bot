@@ -133,7 +133,7 @@
     <div><div class="page-title">Portfolio Dashboard</div><div class="page-sub" id="dash-updated">Loading live prices...</div></div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-secondary btn-sm" onclick="refreshAll()">↻ Refresh</button>
-      <button class="btn btn-secondary btn-sm" id="sync-btn" onclick="syncToSheets()" title="Sync portfolio to Google Sheets">📊 Sync Sheets</button>
+      <button class="btn btn-secondary btn-sm" id="sync-btn" onclick="syncPortfolioToSheets()" title="Sync portfolio to Google Sheets">📊 Sync Sheets</button>
     </div>
   </div>
   <div class="grid-4">
@@ -655,7 +655,7 @@ function renderDividends(){
 }
 
 function refreshAll(){renderDashboard();renderDividends();loadLivePrices();}
-async function syncToSheets(){
+async function syncPortfolioToSheets(){
   const btn=document.getElementById('sync-btn');
   btn.textContent='⏳ Syncing...';btn.disabled=true;
   try{
