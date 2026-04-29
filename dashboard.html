@@ -285,7 +285,7 @@ function saveWatch(){localStorage.setItem('pai_watch',JSON.stringify(extraWatch)
 function setCurrency(c){
   currency=c;
   document.querySelectorAll('.cur-btn').forEach(b=>b.classList.toggle('active',b.textContent===c));
-  renderDashboard();renderDividends();
+  renderDashboard();renderDividends();renderWatchCards();renderTransactions();
 }
 function fmt(usd){
   if(currency==='THB')return '฿'+(usd*USD_THB).toLocaleString('en',{maximumFractionDigits:0});
