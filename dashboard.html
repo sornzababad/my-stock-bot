@@ -346,6 +346,10 @@ function fmt(usd){
   if(currency==='THB')return '฿'+(usd*USD_THB).toLocaleString('en',{maximumFractionDigits:0});
   return '$'+usd.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
+function fmtDirect(amount){
+  if(currency==='THB')return '฿'+Math.round(amount).toLocaleString('en');
+  return '$'+amount.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
 function showPage(id,btn){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
@@ -519,30 +523,35 @@ function updateBuckets(){
   document.getElementById('lt-pct-lbl').textContent=lt+'%';
   document.getElementById('st-pct-lbl').textContent=st+'%';
   document.getElementById('cr-pct-lbl').textContent=cr+'%';
-  document.getElementById('lt-amt').textContent=fmt(dep*lt/100);
-  document.getElementById('st-amt').textContent=fmt(dep*st/100);
-  document.getElementById('cr-amt').textContent=fmt(dep*cr/100);
+  document.getElementById('lt-amt').textContent=fmtDirect(dep*lt/100);
+  document.getElementById('st-amt').textContent=fmtDirect(dep*st/100);
+  document.getElementById('cr-amt').textContent=fmtDirect(dep*cr/100);
   const ok=tot===100;
   document.getElementById('bucket-total-pct').textContent=tot+'%'+(ok?' ✓':' ⚠️ ต้องรวม 100%');
   document.getElementById('bucket-total-pct').style.color=ok?'var(--green)':'var(--red)';
-  document.getElementById('bucket-total-amt').textContent=fmt(dep*(tot/100))+' allocated';
+  document.getElementById('bucket-total-amt').textContent=fmtDirect(dep*(tot/100))+' allocated';
   document.getElementById('bucket-status').style.background=ok?'#00d4aa18':'#ff4d6d18';
+  const sym=currency==='THB'?'THB':'USD';
+  const lbl=document.getElementById('deposit-label');
+  if(lbl)lbl.textContent=`จำนวนเงิน (${sym})`;
 }
 async function runAIPlanner(){
-  const dep=parseFloat(document.getElementById('monthly-deposit').value)||0;
+  let dep=parseFloat(document.getElementById('monthly-deposit').value)||0;
   if(!dep){alert('กรุณาใส่จำนวนเงินก่อน');return;}
   const lt=parseInt(document.getElementById('lt-pct').value);
   const st=parseInt(document.getElementById('st-pct').value);
   const cr=parseInt(document.getElementById('cr-pct').value);
   if(lt+st+cr!==100){alert('สัดส่วนรวมต้องเท่ากับ 100% ครับ');return;}
+  // convert to USD for server if user entered THB
+  const depUSD=currency==='THB'?dep/USD_THB:dep;
   const el=document.getElementById('ai-response');
   el.innerHTML='<span class="spinner"></span><span style="color:var(--muted);font-style:italic">⏳ กำลังดึง live technical data... (~15 วิ)</span>';
   try{
     const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/ai-plan',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        deposit:dep,
-        buckets:{longterm:{pct:lt,amount:dep*lt/100},shortterm:{pct:st,amount:dep*st/100},cash:{pct:cr,amount:dep*cr/100}},
+        deposit:depUSD,
+        buckets:{longterm:{pct:lt,amount:depUSD*lt/100},shortterm:{pct:st,amount:depUSD*st/100},cash:{pct:cr,amount:depUSD*cr/100}},
         risk:document.getElementById('risk-level').value,
         goals:document.getElementById('ai-context').value||'',
         watchlist:extraWatch
