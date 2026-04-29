@@ -556,6 +556,26 @@ def webhook():
             print(f"[ERROR] {e}")
     return 'OK', 200
 
+@app.route('/api/portfolio-data', methods=['GET', 'OPTIONS'])
+def get_portfolio_data():
+    if request.method == 'OPTIONS':
+        res = jsonify({'ok': True})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res
+    try:
+        portfolio = load_portfolio()
+        holdings = [
+            {'ticker': ticker, 'qty': h['qty'], 'avg_price': h['avg_price']}
+            for ticker, h in portfolio['holdings'].items()
+        ]
+        res = jsonify({'ok': True, 'holdings': holdings})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res
+    except Exception as e:
+        res = jsonify({'error': str(e)})
+        res.headers['Access-Control-Allow-Origin'] = '*'
+        return res, 500
+
 @app.route('/api/sync-portfolio', methods=['POST', 'OPTIONS'])
 def sync_portfolio_to_sheets():
     if request.method == 'OPTIONS':
