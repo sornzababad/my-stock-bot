@@ -317,7 +317,7 @@ const holdings=[
 ];
 let extraWatch=JSON.parse(localStorage.getItem('pai_watch')||'[]');
 let watchSignals={};
-let watchPrices={};
+let watchPrices=JSON.parse(localStorage.getItem('pai_watch_prices')||'{}');
 let transactions=JSON.parse(localStorage.getItem('pai_txns')||'[]');
 const divData=[
   {ticker:'SCHD',name:'Schwab Dividend ETF',shares:4.0511,div:0.2535,freq:'Q',nextDate:'2026-06-20'},
@@ -334,6 +334,7 @@ const TICKERS=[
 
 function saveTxns(){localStorage.setItem('pai_txns',JSON.stringify(transactions));}
 function saveWatch(){localStorage.setItem('pai_watch',JSON.stringify(extraWatch));}
+function saveWatchPrices(){localStorage.setItem('pai_watch_prices',JSON.stringify(watchPrices));}
 
 function setCurrency(c){
   currency=c;
@@ -356,8 +357,8 @@ function showPage(id,btn){
   document.getElementById('page-'+id).classList.add('active');
   if(btn)btn.classList.add('active');
   if(id==='dashboard')renderDashboard();
-  if(id==='watchlist'&&!watchAiDone){renderWatchCards();loadSignals();}
-  else if(id==='watchlist')renderWatchCards();
+  if(id==='watchlist'&&!watchAiDone){renderWatchCards();loadWatchPrices();loadSignals();}
+  else if(id==='watchlist'){renderWatchCards();loadWatchPrices();}
   if(id==='transactions'){loadTxnsFromSheets();renderTransactions();}
   if(id==='dividends')renderDividends();
   if(id==='planner')initPlanner();
@@ -432,7 +433,7 @@ function renderWatchCards(){
         <span class="badge ${sc}" id="wsig-${ticker}">${sig?.signal||'⏳'}</span>
       </div>
       ${price!==null?`<div class="watch-price">${fmt(price)}</div>
-      <div style="font-size:.8rem" class="${chg>=0?'pos':'neg'}">${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(2)}% vs cost</div>`:'<div class="watch-price" style="color:var(--muted)">—</div>'}
+      ${h?`<div style="font-size:.8rem" class="${chg>=0?'pos':'neg'}">${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(2)}% vs cost</div>`:'<div style="font-size:.8rem;color:var(--muted)">Live price</div>'}`:'<div class="watch-price" style="color:var(--muted)">—</div>'}
       <div class="watch-reason" id="wreason-${ticker}">${sig?.reason||'<span style="color:var(--muted);font-style:italic">Analyzing...</span>'}</div>
       ${!isHeld?`<button class="btn btn-danger btn-sm" style="margin-top:9px;width:100%" onclick="removeWatch('${ticker}')">Remove</button>`:''}
     </div>`;
@@ -463,7 +464,7 @@ async function addWatchFromInput(){
     try{
       const res=await fetch(`https://my-stock-bot-kuim.onrender.com/api/live-prices?tickers=${t}`);
       const data=await res.json();
-      if(data.ok&&data.prices[t]) watchPrices[t]=data.prices[t];
+      if(data.ok&&data.prices[t]){ watchPrices[t]=data.prices[t]; saveWatchPrices(); }
     }catch(e){}
   }
   renderWatchCards();
@@ -478,7 +479,21 @@ async function fetchOneSig(ticker){
     renderWatchCards();
   }catch(e){}
 }
-function removeWatch(t){extraWatch=extraWatch.filter(x=>x!==t);saveWatch();delete watchSignals[t];renderWatchCards();}
+function removeWatch(t){extraWatch=extraWatch.filter(x=>x!==t);saveWatch();delete watchSignals[t];delete watchPrices[t];saveWatchPrices();renderWatchCards();}
+
+async function loadWatchPrices(){
+  const watchOnly=getAllWatch().filter(t=>!holdings.find(h=>h.ticker===t));
+  if(!watchOnly.length)return;
+  try{
+    const res=await fetch(`https://my-stock-bot-kuim.onrender.com/api/live-prices?tickers=${watchOnly.join(',')}`);
+    const data=await res.json();
+    if(data.ok&&data.prices){
+      watchOnly.forEach(t=>{if(data.prices[t])watchPrices[t]=data.prices[t];});
+      saveWatchPrices();
+      renderWatchCards();
+    }
+  }catch(e){}
+}
 function refreshSignals(){watchSignals={};watchAiDone=false;renderWatchCards();loadSignals();}
 async function loadAiSuggestions(){
   const btn=document.getElementById('suggest-btn');
@@ -666,7 +681,7 @@ function renderDividends(){
   divCI=new Chart(document.getElementById('divChart'),{type:'bar',data:{labels,datasets:[{label:'Annual Income',data:vals,backgroundColor:['#6c63ff','#00d4aa'],borderRadius:8}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8892a4'},grid:{display:false}},y:{ticks:{color:'#8892a4',callback:v=>'$'+v.toFixed(2)},grid:{color:'#2a2f45'}}}}});
 }
 
-function refreshAll(){renderDashboard();renderDividends();loadLivePrices();}
+function refreshAll(){renderDashboard();renderDividends();loadLivePrices();loadWatchPrices();}
 async function syncPortfolioToSheets(){
   const btn=document.getElementById('sync-btn');
   btn.textContent='⏳ Syncing...';btn.disabled=true;
@@ -745,7 +760,7 @@ async function loadLivePrices(){
 renderDashboard();
 renderDividends();
 renderTransactions();
-loadHoldingsFromServer().then(()=>loadLivePrices());
+loadHoldingsFromServer().then(async ()=>{await loadLivePrices();await loadWatchPrices();});
 </script>
 </body>
 </html>
