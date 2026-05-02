@@ -596,7 +596,7 @@ async function handleOCR(event){
     document.getElementById('ocr-status').innerHTML='<span class="spinner"></span><span style="color:var(--muted);font-size:.83rem">Reading screenshot...</span>';
     document.getElementById('ocr-result').style.display='none';document.getElementById('ocr-apply-btn').style.display='none';
     try{
-      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,{
+      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({contents:[{parts:[
           {inline_data:{mime_type:file.type,data:b64}},
