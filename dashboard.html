@@ -444,7 +444,7 @@ async function loadSignals(){
   const hs=holdings.map(h=>`${h.ticker}:$${h.price}(cost$${h.cost})`).join(',');
   const prompt=`Analyze these tickers: ${tickers.join(',')}. Context: ${hs}. Respond ONLY with JSON array, no markdown: [{"ticker":"X","signal":"BUY|SELL|HOLD","reason":"1 sentence with key indicator"}]`;
   try{
-    const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,messages:[{role:'user',content:prompt}]})});
+    const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,messages:[{role:'user',content:prompt}]})});
     const data=await res.json();
     const text=data.content?.find(b=>b.type==='text')?.text||'[]';
     JSON.parse(text.replace(/```json|```/g,'').trim()).forEach(item=>{watchSignals[item.ticker]={signal:item.signal,reason:item.reason};});
@@ -471,7 +471,7 @@ async function addWatchFromInput(){
 }
 async function fetchOneSig(ticker){
   try{
-    const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:150,messages:[{role:'user',content:`Signal for ${ticker}. JSON only: {"ticker":"${ticker}","signal":"BUY|SELL|HOLD","reason":"1 sentence"}`}]})});
+    const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:150,messages:[{role:'user',content:`Signal for ${ticker}. JSON only: {"ticker":"${ticker}","signal":"BUY|SELL|HOLD","reason":"1 sentence"}`}]})});
     const data=await res.json();
     const obj=JSON.parse(data.content?.find(b=>b.type==='text')?.text.replace(/```json|```/g,'').trim()||'{}');
     watchSignals[ticker]={signal:obj.signal||'HOLD',reason:obj.reason||''};
@@ -573,7 +573,7 @@ async function handleOCR(event){
     document.getElementById('ocr-status').innerHTML='<span class="spinner"></span><span style="color:var(--muted);font-size:.83rem">Reading screenshot...</span>';
     document.getElementById('ocr-result').style.display='none';document.getElementById('ocr-apply-btn').style.display='none';
     try{
-      const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:'Extract transaction. JSON only no markdown: {"date":"YYYY-MM-DD","type":"BUY or SELL","ticker":"SYMBOL","shares":0,"price":0,"fees":0,"notes":""}'}]}]})});
+      const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:400,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:'Extract transaction. JSON only no markdown: {"date":"YYYY-MM-DD","type":"BUY or SELL","ticker":"SYMBOL","shares":0,"price":0,"fees":0,"notes":""}'}]}]})});
       const data=await res.json();
       ocrParsed=JSON.parse(data.content?.find(b=>b.type==='text')?.text.replace(/```json|```/g,'').trim()||'{}');
       document.getElementById('ocr-status').textContent='';
@@ -746,6 +746,15 @@ renderDashboard();
 renderDividends();
 renderTransactions();
 loadHoldingsFromServer().then(()=>loadLivePrices());
+// Fetch live prices for manually-added watchlist tickers on every load
+(async()=>{
+  if(!extraWatch.length)return;
+  try{
+    const res=await fetch(`https://my-stock-bot-kuim.onrender.com/api/live-prices?tickers=${extraWatch.join(',')}`);
+    const data=await res.json();
+    if(data.ok)Object.assign(watchPrices,data.prices);
+  }catch(e){}
+})();
 </script>
 </body>
 </html>
