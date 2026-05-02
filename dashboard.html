@@ -456,7 +456,7 @@ async function loadSignals(){
   const prompt=`Analyze these tickers: ${tickers.join(',')}. Context: ${hs}. Respond ONLY with JSON array, no markdown: [{"ticker":"X","signal":"BUY|SELL|HOLD","reason":"1 sentence with key indicator"}]`;
   try{
     const text=await callGemini([{text:prompt}],800);
-    JSON.parse(text.replace(/```json|```/g,'').trim()).forEach(item=>{watchSignals[item.ticker]={signal:item.signal,reason:item.reason};});
+    (safeParseJSON(text,[])).forEach(item=>{watchSignals[item.ticker]={signal:item.signal,reason:item.reason};});
     watchAiDone=true;renderWatchCards();
     document.getElementById('watch-sub').textContent=`Signals loaded · ${new Date().toLocaleTimeString()}`;
   }catch(e){document.getElementById('watch-sub').textContent='Signal load failed: '+e.message;}
@@ -482,7 +482,7 @@ async function fetchOneSig(ticker){
   if(!localStorage.getItem('gemini_key'))return;
   try{
     const text=await callGemini([{text:`Signal for ${ticker}. JSON only: {"ticker":"${ticker}","signal":"BUY|SELL|HOLD","reason":"1 sentence"}`}],150);
-    const obj=JSON.parse(text.replace(/```json|```/g,'').trim()||'{}');
+    const obj=safeParseJSON(text,{});
     watchSignals[ticker]={signal:obj.signal||'HOLD',reason:obj.reason||''};
     renderWatchCards();
   }catch(e){}
@@ -608,6 +608,20 @@ function promptGeminiKey(statusElId){
   document.getElementById('ocr-key-setup').style.display='block';
   document.getElementById(statusElId).innerHTML='<span style="color:var(--yellow);font-size:.83rem">Enter your free Gemini key in the Transactions page (📸 OCR card)</span>';
 }
+// Extract the first valid JSON object or array from a string
+function safeParseJSON(text, fallback){
+  if(!text)return fallback;
+  const clean=text.replace(/```json|```/g,'').trim();
+  // Try direct parse first
+  try{return JSON.parse(clean);}catch(_){}
+  // Try extracting first {...} object
+  const obj=clean.match(/\{[\s\S]*\}/);
+  if(obj){try{return JSON.parse(obj[0]);}catch(_){}}
+  // Try extracting first [...] array
+  const arr=clean.match(/\[[\s\S]*\]/);
+  if(arr){try{return JSON.parse(arr[0]);}catch(_){}}
+  return fallback;
+}
 
 // ── OCR ──
 function saveGeminiKey(){
@@ -635,7 +649,7 @@ async function handleOCR(event){
         {inline_data:{mime_type:file.type,data:b64}},
         {text:'Extract transaction from this broker screenshot. JSON only, no markdown: {"date":"YYYY-MM-DD","type":"BUY or SELL","ticker":"STOCK_SYMBOL","shares":0,"price":0,"fees":0,"notes":""}. If price is in THB convert to USD using rate ~33. Return only the JSON object.'}
       ],400);
-      ocrParsed=JSON.parse(text.replace(/```json|```/g,'').trim()||'{}');
+      ocrParsed=safeParseJSON(text,{});
       document.getElementById('ocr-status').textContent='';
       if(!ocrParsed.ticker&&!ocrParsed.shares){
         document.getElementById('ocr-status').innerHTML='<span style="color:var(--yellow);font-size:.83rem">Could not extract data — try a clearer screenshot</span>';
