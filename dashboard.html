@@ -449,14 +449,13 @@ function renderWatchCards(){
   }).join('');
 }
 async function loadSignals(){
+  if(!localStorage.getItem('gemini_key')){document.getElementById('watch-sub').textContent='⚠ Set Gemini key in Transactions page to enable AI signals';return;}
   document.getElementById('watch-sub').textContent='🤖 AI analyzing signals...';
   const tickers=getAllWatch();
   const hs=holdings.map(h=>`${h.ticker}:$${h.price}(cost$${h.cost})`).join(',');
   const prompt=`Analyze these tickers: ${tickers.join(',')}. Context: ${hs}. Respond ONLY with JSON array, no markdown: [{"ticker":"X","signal":"BUY|SELL|HOLD","reason":"1 sentence with key indicator"}]`;
   try{
-    const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,messages:[{role:'user',content:prompt}]})});
-    const data=await res.json();
-    const text=data.content?.find(b=>b.type==='text')?.text||'[]';
+    const text=await callGemini([{text:prompt}],800);
     JSON.parse(text.replace(/```json|```/g,'').trim()).forEach(item=>{watchSignals[item.ticker]={signal:item.signal,reason:item.reason};});
     watchAiDone=true;renderWatchCards();
     document.getElementById('watch-sub').textContent=`Signals loaded · ${new Date().toLocaleTimeString()}`;
@@ -480,10 +479,10 @@ async function addWatchFromInput(){
   fetchOneSig(t);
 }
 async function fetchOneSig(ticker){
+  if(!localStorage.getItem('gemini_key'))return;
   try{
-    const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:150,messages:[{role:'user',content:`Signal for ${ticker}. JSON only: {"ticker":"${ticker}","signal":"BUY|SELL|HOLD","reason":"1 sentence"}`}]})});
-    const data=await res.json();
-    const obj=JSON.parse(data.content?.find(b=>b.type==='text')?.text.replace(/```json|```/g,'').trim()||'{}');
+    const text=await callGemini([{text:`Signal for ${ticker}. JSON only: {"ticker":"${ticker}","signal":"BUY|SELL|HOLD","reason":"1 sentence"}`}],150);
+    const obj=JSON.parse(text.replace(/```json|```/g,'').trim()||'{}');
     watchSignals[ticker]={signal:obj.signal||'HOLD',reason:obj.reason||''};
     renderWatchCards();
   }catch(e){}
@@ -556,7 +555,12 @@ async function runAIPlanner(){
   const depUSD=currency==='THB'?dep/USD_THB:dep;
   const el=document.getElementById('ai-response');
   el.innerHTML='<span class="spinner"></span><span style="color:var(--muted);font-style:italic">⏳ กำลังดึง live technical data... (~15 วิ)</span>';
+  if(!localStorage.getItem('gemini_key')){
+    el.innerHTML='<span style="color:var(--yellow)">⚠ ตั้งค่า Gemini API key ก่อนครับ — ไปที่ Transactions → 📸 OCR card เพื่อใส่ key (ฟรีจาก <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com</a>)</span>';
+    return;
+  }
   try{
+    // Step 1: get prompt with live technical data from server
     const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/ai-plan',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
@@ -568,9 +572,41 @@ async function runAIPlanner(){
       })
     });
     const data=await res.json();
-    if(data.ok) el.textContent=data.plan;
-    else el.innerHTML=`<span style="color:var(--red)">Error: ${data.error}</span>`;
+    if(!data.ok||!data.prompt){el.innerHTML=`<span style="color:var(--red)">Error: ${data.error||'no prompt'}</span>`;return;}
+    // Step 2: call Gemini directly with user's key
+    el.innerHTML='<span class="spinner"></span><span style="color:var(--muted);font-style:italic">🤖 AI กำลังคิด...</span>';
+    const plan=await callGemini([{text:data.prompt}],1200);
+    el.textContent=plan;
   }catch(e){el.innerHTML=`<span style="color:var(--red)">Error: ${e.message}</span>`;}
+}
+
+// ── Gemini helper with model fallback (browser-side, uses user's key) ──
+async function callGemini(parts, maxTokens){
+  const key=localStorage.getItem('gemini_key');
+  if(!key)throw new Error('NO_KEY');
+  const models=['gemini-2.5-flash','gemini-2.0-flash','gemini-1.5-flash','gemini-1.5-flash-8b'];
+  let lastErr;
+  for(const model of models){
+    try{
+      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({contents:[{parts:parts}],generationConfig:{maxOutputTokens:maxTokens}})
+      });
+      const data=await res.json();
+      if(data.error){lastErr=data.error.message||JSON.stringify(data.error);
+        if(lastErr.includes('quota')||lastErr.includes('Quota')||lastErr.includes('429'))continue;
+        throw new Error(lastErr);
+      }
+      const text=data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if(!text){lastErr='Empty response from '+model;continue;}
+      return text;
+    }catch(e){lastErr=e.message;if(e.message==='NO_KEY')throw e;}
+  }
+  throw new Error(lastErr||'All models failed');
+}
+function promptGeminiKey(statusElId){
+  document.getElementById('ocr-key-setup').style.display='block';
+  document.getElementById(statusElId).innerHTML='<span style="color:var(--yellow);font-size:.83rem">Enter your free Gemini key in the Transactions page (📸 OCR card)</span>';
 }
 
 // ── OCR ──
@@ -583,8 +619,7 @@ function saveGeminiKey(){
 }
 async function handleOCR(event){
   const file=event.target.files[0];if(!file)return;
-  const geminiKey=localStorage.getItem('gemini_key');
-  if(!geminiKey){
+  if(!localStorage.getItem('gemini_key')){
     document.getElementById('ocr-key-setup').style.display='block';
     document.getElementById('ocr-status').innerHTML='<span style="color:var(--yellow);font-size:.83rem">Enter your Gemini API key above first</span>';
     return;
@@ -596,16 +631,10 @@ async function handleOCR(event){
     document.getElementById('ocr-status').innerHTML='<span class="spinner"></span><span style="color:var(--muted);font-size:.83rem">Reading screenshot...</span>';
     document.getElementById('ocr-result').style.display='none';document.getElementById('ocr-apply-btn').style.display='none';
     try{
-      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({contents:[{parts:[
-          {inline_data:{mime_type:file.type,data:b64}},
-          {text:'Extract transaction from this broker screenshot. JSON only, no markdown: {"date":"YYYY-MM-DD","type":"BUY or SELL","ticker":"STOCK_SYMBOL","shares":0,"price":0,"fees":0,"notes":""}. If price is in THB convert to USD using rate ~33. Return only the JSON object.'}
-        ]}]})
-      });
-      const data=await res.json();
-      if(data.error){throw new Error(data.error.message||JSON.stringify(data.error));}
-      const text=data.candidates?.[0]?.content?.parts?.[0]?.text||'{}';
+      const text=await callGemini([
+        {inline_data:{mime_type:file.type,data:b64}},
+        {text:'Extract transaction from this broker screenshot. JSON only, no markdown: {"date":"YYYY-MM-DD","type":"BUY or SELL","ticker":"STOCK_SYMBOL","shares":0,"price":0,"fees":0,"notes":""}. If price is in THB convert to USD using rate ~33. Return only the JSON object.'}
+      ],400);
       ocrParsed=JSON.parse(text.replace(/```json|```/g,'').trim()||'{}');
       document.getElementById('ocr-status').textContent='';
       if(!ocrParsed.ticker&&!ocrParsed.shares){
@@ -616,7 +645,7 @@ async function handleOCR(event){
       document.getElementById('ocr-apply-btn').style.display='inline-block';
     }catch(err){
       document.getElementById('ocr-status').innerHTML=`<span style="color:var(--red);font-size:.83rem">Failed: ${err.message}</span>`;
-      if(err.message.includes('API_KEY_INVALID')||err.message.includes('400')){
+      if(err.message.includes('API_KEY_INVALID')){
         localStorage.removeItem('gemini_key');
         document.getElementById('ocr-key-setup').style.display='block';
         document.getElementById('gemini-key-input').value='';

@@ -779,12 +779,12 @@ Give me a SPECIFIC plan for EACH bucket:
 Then 1-line: overall portfolio health check.
 Be direct. Specific numbers. No disclaimers."""
 
-        text = call_gemini(prompt, max_tokens=1200)
-        res = jsonify({'ok': True, 'plan': text})
+        # Return the prompt — frontend will call Gemini directly with user's key
+        res = jsonify({'ok': True, 'prompt': prompt})
         res.headers['Access-Control-Allow-Origin'] = '*'
         return res
     except Exception as e:
-        res = jsonify({'error': str(e)})
+        res = jsonify({'ok': False, 'error': str(e)})
         res.headers['Access-Control-Allow-Origin'] = '*'
         return res, 500
 
