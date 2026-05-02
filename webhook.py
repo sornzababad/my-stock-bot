@@ -7,7 +7,7 @@ Features:
   • TP/SL price alert background thread
 """
 from flask import Flask, request, send_file, jsonify
-import requests, anthropic, yfinance as yf, pandas as pd
+import requests, yfinance as yf, pandas as pd
 import os, json, re, time, threading
 from users import load_users, add_user, remove_user
 from portfolio_routes import portfolio_bp
@@ -19,12 +19,27 @@ app = Flask(__name__)
 app.register_blueprint(portfolio_bp)
 TZ_THAI            = timezone(timedelta(hours=7))
 LINE_TOKEN         = os.getenv('LINE_ACCESS_TOKEN')
-ANTHROPIC_API_KEY  = os.getenv('ANTHROPIC_API_KEY')
+GEMINI_API_KEY     = os.getenv('GEMINI_API_KEY')
 SPREADSHEET_ID     = os.getenv('SPREADSHEET_ID')
 GOOGLE_CREDENTIALS = os.getenv('GOOGLE_CREDENTIALS')
 
+# ── Gemini helper ─────────────────────────────────────────────────
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+
+def call_gemini(prompt, max_tokens=1000, image_b64=None, image_mime=None):
+    parts = []
+    if image_b64:
+        parts.append({"inline_data": {"mime_type": image_mime or "image/jpeg", "data": image_b64}})
+    parts.append({"text": prompt})
+    payload = {
+        "contents": [{"parts": parts}],
+        "generationConfig": {"maxOutputTokens": max_tokens}
+    }
+    r = requests.post(f"{GEMINI_URL}?key={GEMINI_API_KEY}", json=payload, timeout=30)
+    r.raise_for_status()
+    return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+
 # ── helpers (Google Sheets, price, LINE reply) ────────────────────
-# (Keep all your existing helpers exactly as-is — unchanged below)
 
 def get_gsheet():
     try:
@@ -216,14 +231,10 @@ def push_flex(flex_obj):
 
 def ask_claude_stock(user_message):
     try:
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        msg = client.messages.create(
-            model="claude-haiku-4-5-20251001", max_tokens=500,
-            system="""คุณเป็นผู้ช่วยวิเคราะห์หุ้นส่วนตัว ตอบภาษาไทยสั้นกระชับ
-เชี่ยวชาญด้านเทคนิคอลและปัจจัยพื้นฐาน ตอบไม่เกิน 5 บรรทัด
-ถ้าถามนอกเรื่องหุ้นให้บอกว่าตอบได้เฉพาะเรื่องการลงทุน""",
-            messages=[{"role":"user","content":user_message}])
-        return msg.content[0].text
+        system = ("คุณเป็นผู้ช่วยวิเคราะห์หุ้นส่วนตัว ตอบภาษาไทยสั้นกระชับ "
+                  "เชี่ยวชาญด้านเทคนิคอลและปัจจัยพื้นฐาน ตอบไม่เกิน 5 บรรทัด "
+                  "ถ้าถามนอกเรื่องหุ้นให้บอกว่าตอบได้เฉพาะเรื่องการลงทุน")
+        return call_gemini(f"{system}\n\n{user_message}", max_tokens=500)
     except Exception as e: return f"ขออภัย เกิดข้อผิดพลาด: {e}"
 
 def quick_analysis(ticker: str) -> str:
@@ -501,14 +512,31 @@ def claude_proxy():
         res.headers['Access-Control-Allow-Headers'] = 'Content-Type'
         return res
     try:
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        body = request.json
-        msg = client.messages.create(
-            model=body.get('model', 'claude-haiku-4-5-20251001'),
-            max_tokens=body.get('max_tokens', 1000),
-            messages=body.get('messages', [])
-        )
-        res = jsonify({'content': [{'type': 'text', 'text': msg.content[0].text}]})
+        body = request.json or {}
+        messages = body.get('messages', [])
+        max_tokens = body.get('max_tokens', 1000)
+
+        # Translate Anthropic messages format → Gemini (with optional image for OCR)
+        prompt_parts = []
+        image_b64 = None
+        image_mime = None
+        for msg in messages:
+            content = msg.get('content', '')
+            if isinstance(content, str):
+                prompt_parts.append(content)
+            elif isinstance(content, list):
+                for block in content:
+                    if block.get('type') == 'text':
+                        prompt_parts.append(block['text'])
+                    elif block.get('type') == 'image':
+                        src = block.get('source', {})
+                        if src.get('type') == 'base64':
+                            image_b64 = src.get('data')
+                            image_mime = src.get('media_type', 'image/jpeg')
+
+        text = call_gemini('\n'.join(prompt_parts), max_tokens=max_tokens,
+                           image_b64=image_b64, image_mime=image_mime)
+        res = jsonify({'content': [{'type': 'text', 'text': text}]})
         res.headers['Access-Control-Allow-Origin'] = '*'
         return res
     except Exception as e:
@@ -722,12 +750,8 @@ Give me a SPECIFIC plan for EACH bucket:
 Then 1-line: overall portfolio health check.
 Be direct. Specific numbers. No disclaimers."""
 
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        msg = client.messages.create(
-            model='claude-haiku-4-5-20251001', max_tokens=1200,
-            messages=[{'role': 'user', 'content': prompt}]
-        )
-        res = jsonify({'ok': True, 'plan': msg.content[0].text})
+        text = call_gemini(prompt, max_tokens=1200)
+        res = jsonify({'ok': True, 'plan': text})
         res.headers['Access-Control-Allow-Origin'] = '*'
         return res
     except Exception as e:
@@ -850,12 +874,7 @@ def suggest_tickers():
             '[{"ticker":"X","signal":"BUY|WATCH|AVOID","reason":"1 concise sentence with key technicals"}]\n\n'
             + '\n'.join(technicals)
         )
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        msg = client.messages.create(
-            model='claude-haiku-4-5-20251001', max_tokens=600,
-            messages=[{'role': 'user', 'content': prompt}]
-        )
-        text = msg.content[0].text.strip().replace('```json','').replace('```','').strip()
+        text = call_gemini(prompt, max_tokens=600).strip().replace('```json','').replace('```','').strip()
         res = jsonify({'ok': True, 'suggestions': __import__('json').loads(text)})
         res.headers['Access-Control-Allow-Origin'] = '*'
         return res
