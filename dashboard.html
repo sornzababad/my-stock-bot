@@ -597,7 +597,8 @@ async function callGemini(parts, maxTokens){
         if(lastErr.includes('quota')||lastErr.includes('Quota')||lastErr.includes('429'))continue;
         throw new Error(lastErr);
       }
-      const text=data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const allParts=data.candidates?.[0]?.content?.parts||[];
+      const text=allParts.find(p=>!p.thought)?.text||allParts[0]?.text;
       if(!text){lastErr='Empty response from '+model;continue;}
       return text;
     }catch(e){lastErr=e.message;if(e.message==='NO_KEY')throw e;}
@@ -648,7 +649,7 @@ async function handleOCR(event){
       const text=await callGemini([
         {inline_data:{mime_type:file.type,data:b64}},
         {text:'Extract transaction from this broker screenshot. JSON only, no markdown: {"date":"YYYY-MM-DD","type":"BUY or SELL","ticker":"STOCK_SYMBOL","shares":0,"price":0,"fees":0,"notes":""}. If price is in THB convert to USD using rate ~33. Return only the JSON object.'}
-      ],400);
+      ],1024);
       ocrParsed=safeParseJSON(text,{});
       document.getElementById('ocr-status').textContent='';
       if(!ocrParsed.ticker&&!ocrParsed.shares){
