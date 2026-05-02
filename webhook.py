@@ -27,6 +27,8 @@ GOOGLE_CREDENTIALS = os.getenv('GOOGLE_CREDENTIALS')
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 def call_gemini(prompt, max_tokens=1000, image_b64=None, image_mime=None):
+    if not GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY not set")
     parts = []
     if image_b64:
         parts.append({"inline_data": {"mime_type": image_mime or "image/jpeg", "data": image_b64}})
@@ -36,8 +38,13 @@ def call_gemini(prompt, max_tokens=1000, image_b64=None, image_mime=None):
         "generationConfig": {"maxOutputTokens": max_tokens}
     }
     r = requests.post(f"{GEMINI_URL}?key={GEMINI_API_KEY}", json=payload, timeout=30)
-    r.raise_for_status()
-    return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+    if not r.ok:
+        raise ValueError(f"Gemini API error {r.status_code}: {r.text[:300]}")
+    data = r.json()
+    candidates = data.get("candidates", [])
+    if not candidates:
+        raise ValueError(f"Gemini returned no candidates: {data}")
+    return candidates[0]["content"]["parts"][0]["text"]
 
 # ── helpers (Google Sheets, price, LINE reply) ────────────────────
 
@@ -503,6 +510,28 @@ def process_message(text, portfolio):
     return ask_claude_stock(text)
 
 # ── Flask routes ──────────────────────────────────────────────────
+
+@app.route('/api/test-gemini', methods=['GET'])
+def test_gemini():
+    try:
+        text = call_gemini("Say hello in one word.", max_tokens=10)
+        res = jsonify({'ok': True, 'response': text, 'key_set': bool(GEMINI_API_KEY)})
+    except Exception as e:
+        res = jsonify({'ok': False, 'error': str(e), 'key_set': bool(GEMINI_API_KEY)})
+    res.headers['Access-Control-Allow-Origin'] = '*'
+    return res
+
+@app.route('/api/fx-rate', methods=['GET'])
+def fx_rate():
+    try:
+        df = yf.download('THBUSD=X', period='2d', interval='1d', progress=False, auto_adjust=True)
+        if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
+        thb_per_usd = round(1.0 / float(df['Close'].iloc[-1]), 2)
+        res = jsonify({'ok': True, 'USD_THB': thb_per_usd})
+    except Exception as e:
+        res = jsonify({'ok': False, 'USD_THB': 33.0, 'error': str(e)})
+    res.headers['Access-Control-Allow-Origin'] = '*'
+    return res
 
 @app.route('/api/claude', methods=['POST', 'OPTIONS'])
 def claude_proxy():

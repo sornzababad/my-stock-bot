@@ -306,7 +306,9 @@
 <script>
 const PROXY='https://my-stock-bot-kuim.onrender.com';
 let currency='USD';
-const USD_THB=32.40;
+let USD_THB=33.0;
+// Fetch live USD/THB rate on load
+(async()=>{try{const r=await fetch(PROXY+'/api/fx-rate');const d=await r.json();if(d.ok)USD_THB=d.USD_THB;}catch(e){}})();
 const allocTargets={ETF:40,Stock:60,Crypto:0,Fund:0};
 let ocrParsed=null,watchAiDone=false;
 
