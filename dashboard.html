@@ -254,6 +254,14 @@
   <div class="page-header"><div><div class="page-title">Transactions</div><div class="page-sub">Synced with Google Sheets</div></div></div>
   <div class="card" style="margin-bottom:16px">
     <div class="section-title">📸 Import via Screenshot (AI OCR)</div>
+    <div id="ocr-key-setup" style="display:none;margin-bottom:10px;padding:10px;background:var(--card2);border-radius:8px">
+      <div style="font-size:.85rem;color:var(--muted);margin-bottom:6px">🔑 Enter your free Gemini API key to enable OCR (<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent)">get one here</a>)</div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="gemini-key-input" placeholder="AIza..." style="flex:1;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:.85rem"/>
+        <button class="btn btn-primary btn-sm" onclick="saveGeminiKey()">Save</button>
+        <button class="btn btn-sm" onclick="document.getElementById('ocr-key-setup').style.display='none'">✕</button>
+      </div>
+    </div>
     <div class="ocr-zone" onclick="document.getElementById('ocr-file').click()">
       <input type="file" id="ocr-file" accept="image/*" onchange="handleOCR(event)"/>
       <div class="ocr-icon">📷</div>
@@ -566,8 +574,21 @@ async function runAIPlanner(){
 }
 
 // ── OCR ──
+function saveGeminiKey(){
+  const k=document.getElementById('gemini-key-input').value.trim();
+  if(!k)return;
+  localStorage.setItem('gemini_key',k);
+  document.getElementById('ocr-key-setup').style.display='none';
+  document.getElementById('ocr-status').innerHTML='<span style="color:var(--green);font-size:.83rem">Key saved — upload a screenshot now</span>';
+}
 async function handleOCR(event){
   const file=event.target.files[0];if(!file)return;
+  const geminiKey=localStorage.getItem('gemini_key');
+  if(!geminiKey){
+    document.getElementById('ocr-key-setup').style.display='block';
+    document.getElementById('ocr-status').innerHTML='<span style="color:var(--yellow);font-size:.83rem">Enter your Gemini API key above first</span>';
+    return;
+  }
   const reader=new FileReader();
   reader.onload=async(e)=>{
     const b64=e.target.result.split(',')[1];
@@ -575,13 +596,32 @@ async function handleOCR(event){
     document.getElementById('ocr-status').innerHTML='<span class="spinner"></span><span style="color:var(--muted);font-size:.83rem">Reading screenshot...</span>';
     document.getElementById('ocr-result').style.display='none';document.getElementById('ocr-apply-btn').style.display='none';
     try{
-      const res=await fetch('https://my-stock-bot-kuim.onrender.com/api/claude',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:400,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:'Extract transaction. JSON only no markdown: {"date":"YYYY-MM-DD","type":"BUY or SELL","ticker":"SYMBOL","shares":0,"price":0,"fees":0,"notes":""}'}]}]})});
+      const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({contents:[{parts:[
+          {inline_data:{mime_type:file.type,data:b64}},
+          {text:'Extract transaction from this broker screenshot. JSON only, no markdown: {"date":"YYYY-MM-DD","type":"BUY or SELL","ticker":"STOCK_SYMBOL","shares":0,"price":0,"fees":0,"notes":""}. If price is in THB convert to USD using rate ~33. Return only the JSON object.'}
+        ]}]})
+      });
       const data=await res.json();
-      ocrParsed=JSON.parse(data.content?.find(b=>b.type==='text')?.text.replace(/```json|```/g,'').trim()||'{}');
+      if(data.error){throw new Error(data.error.message||JSON.stringify(data.error));}
+      const text=data.candidates?.[0]?.content?.parts?.[0]?.text||'{}';
+      ocrParsed=JSON.parse(text.replace(/```json|```/g,'').trim()||'{}');
       document.getElementById('ocr-status').textContent='';
+      if(!ocrParsed.ticker&&!ocrParsed.shares){
+        document.getElementById('ocr-status').innerHTML='<span style="color:var(--yellow);font-size:.83rem">Could not extract data — try a clearer screenshot</span>';
+        return;
+      }
       const r=document.getElementById('ocr-result');r.textContent='Extracted:\n'+JSON.stringify(ocrParsed,null,2);r.style.display='block';
       document.getElementById('ocr-apply-btn').style.display='inline-block';
-    }catch(err){document.getElementById('ocr-status').innerHTML=`<span style="color:var(--red);font-size:.83rem">Failed: ${err.message}</span>`;}
+    }catch(err){
+      document.getElementById('ocr-status').innerHTML=`<span style="color:var(--red);font-size:.83rem">Failed: ${err.message}</span>`;
+      if(err.message.includes('API_KEY_INVALID')||err.message.includes('400')){
+        localStorage.removeItem('gemini_key');
+        document.getElementById('ocr-key-setup').style.display='block';
+        document.getElementById('gemini-key-input').value='';
+      }
+    }
   };reader.readAsDataURL(file);
 }
 function applyOCR(){
