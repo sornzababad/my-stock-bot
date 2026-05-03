@@ -303,6 +303,111 @@ def check_signal(ticker):
     except Exception as e:
         print(f"[ERROR] {ticker}: {e}"); return None
 
+def check_smallcap_signal(ticker):
+    try:
+        df = yf.download(ticker, period="3mo", interval="1d",
+                         progress=False, auto_adjust=True)
+        if df.empty or len(df) < 25:
+            return None
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
+        vol_avg  = df['Volume'].rolling(20).mean()
+        d        = df['Close'].diff()
+        gain     = d.where(d > 0, 0).rolling(14).mean()
+        loss     = (-d.where(d < 0, 0)).rolling(14).mean()
+        df['RSI'] = 100 - (100 / (1 + gain / loss))
+        last     = df.iloc[-1]
+        price    = float(last['Close'])
+        rsi      = float(last['RSI'])   if not pd.isna(last['RSI'])   else 0
+        ema20    = float(last['EMA20']) if not pd.isna(last['EMA20']) else 0
+        vol_last = float(last['Volume'])
+        vol_mean = float(vol_avg.iloc[-1])
+        if vol_mean <= 0 or ema20 <= 0:
+            return None
+        vol_ratio = vol_last / vol_mean
+        if vol_ratio < 1.5:           return None
+        if not (45 <= rsi <= 75):     return None
+        if price <= ema20:            return None
+        pct_above_ema20 = (price - ema20) / ema20 * 100
+        return (price, rsi, vol_ratio, pct_above_ema20)
+    except Exception as e:
+        print(f"[SMALLCAP ERROR] {ticker}: {e}"); return None
+
+def format_smallcap_message(hits_us, hits_th):
+    if not hits_us and not hits_th:
+        return None
+    now   = datetime.now(TZ_THAI).strftime("%d %b %Y  %H:%M")
+    total = len(hits_us) + len(hits_th)
+
+    contents = [
+        {"type":"text","text":"🚀 Small-Cap Momentum Alert",
+         "weight":"bold","size":"md","color":"#FFFFFF"},
+        {"type":"text","text":now,"size":"xs","color":"#78909C","margin":"xs"},
+        {"type":"separator","color":"#37474F","margin":"sm"},
+    ]
+
+    if hits_us:
+        contents.append({"type":"text","text":"🇺🇸 US Small-Caps",
+                          "size":"sm","color":"#90CAF9","weight":"bold","margin":"sm"})
+        for ticker, price, rsi, vol_ratio, pct_ema20 in hits_us:
+            contents.append({"type":"text","wrap":True,"size":"xs","color":"#CFD8DC","margin":"xs",
+                              "text":f"• {ticker}  ${price:,.2f}  RSI {rsi:.0f}  Vol ×{vol_ratio:.1f}  +{pct_ema20:.1f}% EMA20"})
+
+    if hits_th:
+        contents.append({"type":"text","text":"🇹🇭 TH Small-Caps",
+                          "size":"sm","color":"#90CAF9","weight":"bold","margin":"sm"})
+        for ticker, price, rsi, vol_ratio, pct_ema20 in hits_th:
+            display = ticker.replace(".BK","")
+            contents.append({"type":"text","wrap":True,"size":"xs","color":"#CFD8DC","margin":"xs",
+                              "text":f"• {display}  ฿{price:,.2f}  RSI {rsi:.0f}  Vol ×{vol_ratio:.1f}  +{pct_ema20:.1f}% EMA20"})
+
+    contents += [
+        {"type":"separator","color":"#37474F","margin":"sm"},
+        {"type":"text","wrap":True,"size":"xxs","color":"#546E7A","margin":"xs",
+         "text":f"พบ {total} ตัวผ่านเกณฑ์  Vol>1.5x  RSI 45-75  Price>EMA20"},
+    ]
+
+    return {
+        "type":"flex",
+        "altText":f"🚀 Small-Cap Alert — {total} สัญญาณ momentum",
+        "contents":{
+            "type":"bubble","size":"kilo",
+            "header":{
+                "type":"box","layout":"vertical",
+                "backgroundColor":"#0D1B2A","paddingAll":"14px",
+                "contents":[
+                    {"type":"text","text":"📡 Small-Cap Growth Scanner",
+                     "weight":"bold","size":"sm","color":"#64B5F6"}
+                ]
+            },
+            "body":{
+                "type":"box","layout":"vertical",
+                "backgroundColor":"#1E2A3A","paddingAll":"14px",
+                "spacing":"xs","contents":contents
+            }
+        }
+    }
+
+def send_smallcap_alerts():
+    print(f"[SMALLCAP] Scanning {len(SMALLCAP_STOCKS)} tickers...")
+    t0 = time.time()
+    hits_us, hits_th = [], []
+    for ticker in SMALLCAP_STOCKS:
+        res = check_smallcap_signal(ticker)
+        if not res:
+            continue
+        price, rsi, vol_ratio, pct_ema20 = res
+        print(f"[SMALLCAP HIT] {ticker}  RSI={rsi:.1f}  Vol×{vol_ratio:.1f}")
+        entry = (ticker, price, rsi, vol_ratio, pct_ema20)
+        (hits_th if ticker.endswith(".BK") else hits_us).append(entry)
+    print(f"[SMALLCAP] {len(hits_us)+len(hits_th)} hits in {round(time.time()-t0,1)}s")
+    msg = format_smallcap_message(hits_us, hits_th)
+    if msg:
+        push_messages([msg])
+    else:
+        print("[SMALLCAP] No signals — skipping LINE push")
+
 def mkt_summary(chg):
     if abs(chg)<0.1:  return "⬛ ทรงตัว ไม่มีทิศทางชัดเจน"
     elif chg>1.0:     return "🚀 ปรับขึ้นแรง มีแรงซื้อเข้ามาหนุน"
@@ -340,6 +445,24 @@ STOCKS = list(dict.fromkeys([
     'ORI.BK','SPALI.BK','STEC.BK','CK.BK','MAKRO.BK','COM7.BK',
     'GFPT.BK','TFG.BK','TPIPP.BK','SUPER.BK','SPCG.BK',
 ]))
+
+# ── SMALL-CAP GROWTH WATCHLIST ────────────────────────────────────
+
+SMALLCAP_STOCKS_US = [
+    'RKLB','ASTS','ACHR','JOBY','LUNR',           # Space / eVTOL
+    'SOUN','BBAI','AI','GTLB','RDDT','DUOL',       # AI / Software
+    'APP','SERV','UPST','AFRM','OPEN',             # Fintech / Growth
+    'DKNG','MARA','CIFR','CLSK','CRDO','NVTS',     # Crypto / Semi
+    'CLOV','TTWO','IONQ',                           # Other
+]
+
+SMALLCAP_STOCKS_TH = [
+    'ADVICE.BK','BE8.BK','INET.BK','INSET.BK',
+    'ITEL.BK','JMART.BK','JMT.BK','HUMAN.BK',
+    'MFEC.BK','NETBAY.BK','SCI.BK','JWD.BK','LEO.BK',
+]
+
+SMALLCAP_STOCKS = SMALLCAP_STOCKS_US + SMALLCAP_STOCKS_TH
 
 # ── send one market ───────────────────────────────────────────────
 
@@ -405,6 +528,8 @@ def main():
     send_market(thai_sigs,"🏦","SET","SET Index",set_p,set_c,thai_count,scan_s,filtered)
     time.sleep(1)
     send_market(us_sigs,"🗽","US","S&P 500",sp_p,sp_c,us_count,scan_s,filtered)
+    time.sleep(1)
+    send_smallcap_alerts()
 
 if __name__ == "__main__":
     main()
