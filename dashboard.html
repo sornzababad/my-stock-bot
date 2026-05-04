@@ -584,7 +584,7 @@ async function runAIPlanner(){
 async function callGemini(parts, maxTokens){
   const key=localStorage.getItem('gemini_key');
   if(!key)throw new Error('NO_KEY');
-  const models=['gemini-2.5-flash','gemini-2.0-flash','gemini-2.0-flash-lite','gemini-1.5-flash'];
+  const models=['gemini-2.5-flash','gemini-2.0-flash','gemini-2.0-flash-lite'];
   let lastErr;
   for(const model of models){
     try{
@@ -594,7 +594,7 @@ async function callGemini(parts, maxTokens){
       });
       const data=await res.json();
       if(data.error){lastErr=data.error.message||JSON.stringify(data.error);
-        if(lastErr.includes('quota')||lastErr.includes('Quota')||lastErr.includes('429'))continue;
+        if(lastErr.includes('quota')||lastErr.includes('Quota')||lastErr.includes('429')||lastErr.includes('not found')||lastErr.includes('404')||lastErr.includes('deprecated'))continue;
         throw new Error(lastErr);
       }
       const allParts=data.candidates?.[0]?.content?.parts||[];
