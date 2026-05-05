@@ -1,0 +1,15 @@
+[Unit]
+Description=Stock Bot (LINE Webhook + Portfolio)
+After=network.target
+
+[Service]
+Type=simple
+User=botuser
+WorkingDirectory=/home/botuser/my-stock-bot
+EnvironmentFile=/home/botuser/my-stock-bot/.env
+ExecStart=/home/botuser/my-stock-bot/venv/bin/gunicorn webhook:app --bind 127.0.0.1:5001 --workers 1 --timeout 120
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
