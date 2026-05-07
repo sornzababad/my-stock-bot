@@ -14,7 +14,6 @@ import os, re, time, json
 from users import load_users
 from datetime import datetime, timezone, timedelta
 from gold_etf_alerts import send_gold_etf_alerts
-from compact_cards import build_compact_carousels
 
 TZ_THAI = timezone(timedelta(hours=7))
 LINE_TOKEN = os.getenv('CHANNEL_ACCESS_TOKEN')
@@ -468,32 +467,36 @@ SMALLCAP_STOCKS = SMALLCAP_STOCKS_US + SMALLCAP_STOCKS_TH
 
 # ── send one market ───────────────────────────────────────────────
 
-def send_market(compact_sigs, flag, market, idx_name, idx_price, idx_chg,
+def send_market(sigs, flag, market, idx_name, idx_price, idx_chg,
                 scan_n, scan_s, ai_fil):
-    """
-    compact_sigs: list of dicts {ticker, sig, price, rsi, rr, currency, chart_url}
-    """
-    buy_n   = sum(1 for s in compact_sigs if s["sig"] == "BUY")
-    watch_n = sum(1 for s in compact_sigs if s["sig"] == "SELL")
-    exit_n  = 0  # kept for header compatibility
+    buy_n   = sum(1 for t,_,_ in sigs if t=="BUY")
+    watch_n = sum(1 for t,c,_ in sigs if t=="SELL" and c<4)
+    exit_n  = sum(1 for t,c,_ in sigs if t=="SELL" and c>=4)
 
-    if not compact_sigs:
-        push_messages([flex_no_signal(flag, market, idx_name, idx_price, idx_chg, scan_n, scan_s)])
+    if not sigs:
+        push_messages([flex_no_signal(flag,market,idx_name,idx_price,idx_chg,scan_n,scan_s)])
         return
 
-    # Market summary header
-    header = flex_header(flag, market, idx_name, idx_price, idx_chg,
-                         scan_n, scan_s, buy_n, watch_n, exit_n, ai_fil,
+    header = flex_header(flag,market,idx_name,idx_price,idx_chg,
+                         scan_n,scan_s,buy_n,watch_n,exit_n,ai_fil,
                          mkt_summary(idx_chg))
-    push_messages([header])
-    time.sleep(0.5)
 
-    # Compact sector-grouped signal cards
-    build_compact_carousels(
-        compact_sigs,
-        push_fn=push_messages,
-        alt_prefix=f"{flag} {market} Close",
-    )
+    bubbles = [header['contents']]
+    for _, _, (card, _) in sigs:
+        bubbles.append(card['contents'])
+
+    total_pages = (len(bubbles) + 9) // 10
+    for i in range(0, len(bubbles), 10):
+        chunk    = bubbles[i:i + 10]
+        page_num = i // 10 + 1
+        suffix   = f" ({page_num}/{total_pages})" if total_pages > 1 else ""
+        push_messages([{
+            "type": "flex",
+            "altText": header.get('altText', f"{flag} {market} Alert") + suffix,
+            "contents": {"type": "carousel", "contents": chunk}
+        }])
+        if i + 10 < len(bubbles):
+            time.sleep(0.5)
 
 # ── MAIN ─────────────────────────────────────────────────────────
 
@@ -509,7 +512,7 @@ def main():
     for ticker in STOCKS:
         res = check_signal(ticker)
         if not res: continue
-        sig, price, rsi, atr, ec, bp, reasons, tp, sl = res
+        sig,price,rsi,atr,ec,bp,reasons,tp,sl = res
         print(f"[SIGNAL] {ticker} {sig}")
 
         ai   = analyze_with_claude(ticker, sig, price, rsi, atr, tp, sl)
@@ -519,22 +522,14 @@ def main():
 
         is_thai  = ticker.endswith(".BK")
         cur      = "฿" if is_thai else "$"
-        display  = ticker.replace(".BK", "") if is_thai else ticker
-        rr       = (tp - price) / (price - sl) if tp and sl and (price - sl) > 0 else 0
-        entry    = {
-            "ticker":    ticker,
-            "sig":       sig,
-            "price":     price,
-            "rsi":       rsi,
-            "rr":        rr,
-            "currency":  cur,
-            "chart_url": tv_chart_url(display),
-        }
-        (thai_sigs if is_thai else us_sigs).append(entry)
+        display  = ticker.replace(".BK","") if is_thai else ticker
+        card     = flex_stock(display,sig,price,rsi,atr,ec,bp,reasons,ai,conv,tp,sl,cur)
+        bucket   = thai_sigs if is_thai else us_sigs
+        bucket.append((sig, conv, (card, display)))
 
     scan_s     = round(time.time()-t0, 1)
     thai_count = sum(1 for s in STOCKS if s.endswith(".BK"))
-    us_count   = len(STOCKS) - thai_count
+    us_count   = len(STOCKS)-thai_count
     print(f"[DONE] Thai={len(thai_sigs)} US={len(us_sigs)} filtered={filtered} {scan_s}s")
 
     send_market(thai_sigs,"🏦","SET","SET Index",set_p,set_c,thai_count,scan_s,filtered)
