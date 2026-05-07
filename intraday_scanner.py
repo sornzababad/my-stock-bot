@@ -69,6 +69,47 @@ INTRADAY_STOCKS = list(dict.fromkeys([
     'AOT.BK','BEM.BK','BTS.BK','LH.BK','AP.BK','CPN.BK',
 ]))
 
+TICKER_NAMES = {
+    "AAPL":"Apple","MSFT":"Microsoft","NVDA":"Nvidia","AMD":"AMD",
+    "META":"Meta Platforms","GOOGL":"Alphabet","AMZN":"Amazon","TSLA":"Tesla",
+    "AVGO":"Broadcom","ORCL":"Oracle","NFLX":"Netflix","ADBE":"Adobe",
+    "CRM":"Salesforce","INTC":"Intel","QCOM":"Qualcomm",
+    "MU":"Micron","LRCX":"Lam Research","AMAT":"Applied Materials",
+    "TXN":"Texas Instruments","MRVL":"Marvell","ON":"ON Semi",
+    "KLAC":"KLA Corp","ASML":"ASML",
+    "NOW":"ServiceNow","WDAY":"Workday","INTU":"Intuit","TEAM":"Atlassian",
+    "DDOG":"Datadog","SNOW":"Snowflake","NET":"Cloudflare","CRWD":"CrowdStrike",
+    "PLTR":"Palantir","COIN":"Coinbase","MSTR":"MicroStrategy",
+    "HOOD":"Robinhood","SQ":"Block","RIOT":"Riot Platforms","MARA":"Marathon Digital",
+    "JPM":"JPMorgan Chase","BAC":"Bank of America","GS":"Goldman Sachs",
+    "MS":"Morgan Stanley","WFC":"Wells Fargo","C":"Citigroup",
+    "BLK":"BlackRock","SCHW":"Charles Schwab",
+    "V":"Visa","MA":"Mastercard","AXP":"American Express","PYPL":"PayPal","COF":"Capital One",
+    "XOM":"ExxonMobil","CVX":"Chevron","COP":"ConocoPhillips","SLB":"Schlumberger",
+    "EOG":"EOG Resources","OXY":"Occidental","MPC":"Marathon Petroleum","HAL":"Halliburton",
+    "UNH":"UnitedHealth","JNJ":"Johnson & Johnson","PFE":"Pfizer","ABBV":"AbbVie",
+    "LLY":"Eli Lilly","MRK":"Merck","AMGN":"Amgen","GILD":"Gilead",
+    "REGN":"Regeneron","VRTX":"Vertex","MRNA":"Moderna","TMO":"Thermo Fisher","ISRG":"Intuitive Surgical",
+    "WMT":"Walmart","COST":"Costco","TGT":"Target","HD":"Home Depot",
+    "NKE":"Nike","SBUX":"Starbucks","MCD":"McDonald's","KO":"Coca-Cola",
+    "PEP":"PepsiCo","BABA":"Alibaba","MELI":"MercadoLibre","SHOP":"Shopify",
+    "F":"Ford","GM":"General Motors","RIVN":"Rivian",
+    "SPY":"S&P 500 ETF","QQQ":"Nasdaq 100 ETF","IWM":"Russell 2000 ETF",
+    "GLD":"SPDR Gold ETF","TLT":"20Y Treasury ETF","SOXX":"Semiconductor ETF",
+    "XLK":"Tech Sector ETF","XLF":"Finance Sector ETF","XLE":"Energy Sector ETF","XLV":"Health Sector ETF",
+    "KBANK.BK":"Kasikorn Bank","SCB.BK":"SCB","BBL.BK":"Bangkok Bank",
+    "KTB.BK":"Krungthai Bank","TTB.BK":"TMB Thanachart","BAY.BK":"Bank of Ayudhya","TISCO.BK":"TISCO",
+    "PTT.BK":"PTT","PTTEP.BK":"PTTEP","TOP.BK":"Thai Oil",
+    "OR.BK":"OR","BCP.BK":"Bangchak","GULF.BK":"Gulf Energy","GPSC.BK":"GPSC",
+    "DELTA.BK":"Delta Electronics","ADVANC.BK":"AIS","TRUE.BK":"True Corp",
+    "INTUCH.BK":"Intouch Holdings","HANA.BK":"Hana Microelectronics","KCE.BK":"KCE Electronics",
+    "BDMS.BK":"BDMS","BH.BK":"Bumrungrad Hospital","BCH.BK":"Bangkok Chain","CHG.BK":"Chularat Hospital",
+    "CPALL.BK":"CP All","CRC.BK":"Central Retail","HMPRO.BK":"HomePro",
+    "BJC.BK":"BJC","MAKRO.BK":"Makro","CBG.BK":"Carabao Group",
+    "AOT.BK":"Airports of Thailand","BEM.BK":"BEM","BTS.BK":"BTS Group",
+    "LH.BK":"Land & Houses","AP.BK":"AP Thailand","CPN.BK":"CPN",
+}
+
 def push_flex(obj):
     uids = load_users()
     print(f"[PUSH] token={'OK' if LINE_TOKEN else 'MISSING'} | users={uids}")
@@ -146,7 +187,8 @@ def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency
     rsi_color = "#FF5252" if rsi >= 70 else ("#00E676" if rsi <= 30 else "#90CAF9")
     conv_bar  = "▰" * conviction + "▱" * (5 - conviction)
 
-    name_line = info.get("name") or sym
+    # Full name: static dict first, fall back to Claude's parsed name, then symbol
+    name_line = TICKER_NAMES.get(ticker) or info.get("name") or sym
     biz_line  = info.get("business") or ""
     reason_ai = info.get("reason") or ""
     news_line = info.get("news") or ""
@@ -158,79 +200,77 @@ def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency
             "type": "bubble", "size": "kilo",
             "header": {
                 "type": "box", "layout": "vertical",
-                "backgroundColor": hbg, "paddingAll": "14px", "spacing": "none",
+                "backgroundColor": hbg, "paddingAll": "12px", "spacing": "none",
                 "contents": [
                     # Ticker + badge pill
-                    {"type": "box", "layout": "horizontal", "contents": [
+                    {"type": "box", "layout": "horizontal", "alignItems": "center", "contents": [
                         {"type": "text", "text": sym, "weight": "bold",
-                         "size": "xxl", "color": "#FFFFFF", "flex": 1},
+                         "size": "xl", "color": "#FFFFFF", "flex": 1},
                         {"type": "box", "layout": "vertical", "backgroundColor": bc,
-                         "cornerRadius": "6px", "paddingStart": "10px", "paddingEnd": "10px",
-                         "paddingTop": "3px", "paddingBottom": "3px", "justifyContent": "center",
+                         "cornerRadius": "5px", "paddingStart": "8px", "paddingEnd": "8px",
+                         "paddingTop": "2px", "paddingBottom": "2px", "justifyContent": "center",
                          "contents": [{"type": "text", "text": badge,
-                                       "weight": "bold", "size": "sm", "color": "#000000"}]},
+                                       "weight": "bold", "size": "xs", "color": "#000000"}]},
                     ]},
-                    # Price + company name
-                    {"type": "box", "layout": "horizontal", "margin": "xs", "contents": [
-                        {"type": "text", "text": f"{currency}{price:,.2f}",
-                         "weight": "bold", "size": "lg", "color": bc, "flex": 1},
-                        {"type": "text", "text": name_line, "size": "xxs",
-                         "color": "#546E7A", "align": "end", "flex": 2, "wrap": True},
-                    ]},
-                    # Business + RSI pill + time
-                    {"type": "box", "layout": "horizontal", "margin": "xs",
+                    # Full company name — always shown
+                    {"type": "text", "text": name_line, "size": "xs",
+                     "color": "#90A4AE", "margin": "xs", "wrap": True},
+                    # Price + RSI pill + time
+                    {"type": "box", "layout": "horizontal", "margin": "sm",
                      "alignItems": "center", "contents": [
-                        *([{"type": "text", "text": f"🏢  {biz_line}", "size": "xxs",
-                            "color": "#607D8B", "wrap": True, "flex": 3}] if biz_line else []),
+                        {"type": "text", "text": f"{currency}{price:,.2f}",
+                         "weight": "bold", "size": "sm", "color": bc, "flex": 1},
                         {"type": "box", "layout": "vertical", "flex": 0,
-                         "backgroundColor": "#1A2332", "cornerRadius": "10px",
-                         "paddingStart": "7px", "paddingEnd": "7px",
+                         "backgroundColor": "#1A2332", "cornerRadius": "8px",
+                         "paddingStart": "6px", "paddingEnd": "6px",
                          "paddingTop": "2px", "paddingBottom": "2px",
                          "contents": [{"type": "text", "text": f"RSI {rsi:.0f}",
                                        "size": "xxs", "color": rsi_color, "weight": "bold"}]},
-                        {"type": "text", "text": f" ⏰{now}", "size": "xxs",
+                        {"type": "text", "text": f"  ⏰{now}", "size": "xxs",
                          "color": "#37474F", "flex": 0},
                     ]},
+                    *([{"type": "text", "text": f"🏢  {biz_line}", "size": "xxs",
+                        "color": "#546E7A", "wrap": True, "margin": "xs"}] if biz_line else []),
                 ]
             },
             "body": {
                 "type": "box", "layout": "vertical",
-                "backgroundColor": "#0E1621", "paddingAll": "12px", "spacing": "sm",
+                "backgroundColor": "#0E1621", "paddingAll": "10px", "spacing": "xs",
                 "contents": [
                     {"type": "text", "text": reason,
-                     "color": "#CFD8DC", "size": "xs", "wrap": True},
+                     "color": "#CFD8DC", "size": "xxs", "wrap": True},
                     *([{"type": "text", "text": f"🤖  {reason_ai}",
-                        "color": "#FFD54F", "size": "xs", "wrap": True}] if reason_ai else []),
+                        "color": "#FFD54F", "size": "xxs", "wrap": True}] if reason_ai else []),
                     *([{"type": "box", "layout": "horizontal", "margin": "xs",
-                        "backgroundColor": "#111B2A", "cornerRadius": "6px",
-                        "paddingAll": "6px", "contents": [
+                        "backgroundColor": "#111B2A", "cornerRadius": "5px",
+                        "paddingAll": "5px", "contents": [
                             {"type": "text", "text": "📰  " + news_line,
                              "color": "#90CAF9", "size": "xxs", "wrap": True},
                         ]}] if news_line else []),
 
-                    {"type": "separator", "color": "#1E2D3D", "margin": "sm"},
+                    {"type": "separator", "color": "#1E2D3D", "margin": "xs"},
 
                     # TP | SL side by side
-                    {"type": "box", "layout": "horizontal", "spacing": "sm", "contents": [
+                    {"type": "box", "layout": "horizontal", "spacing": "sm", "margin": "xs", "contents": [
                         {"type": "box", "layout": "vertical",
-                         "backgroundColor": "#0A1F10", "cornerRadius": "10px",
-                         "paddingAll": "10px", "flex": 1,
+                         "backgroundColor": "#0A1F10", "cornerRadius": "8px",
+                         "paddingAll": "8px", "flex": 1,
                          "contents": [
-                             {"type": "text", "text": "🎯  TARGET", "size": "xxs",
+                             {"type": "text", "text": "🎯 TARGET", "size": "xxs",
                               "color": "#2E7D52", "weight": "bold"},
                              {"type": "text", "text": f"{currency}{tp:,.2f}",
-                              "size": "md", "color": "#69F0AE", "weight": "bold"},
+                              "size": "sm", "color": "#69F0AE", "weight": "bold"},
                              {"type": "text", "text": f"{pct_tp:+.1f}%",
                               "size": "xxs", "color": "#2E7D52"},
                          ]},
                         {"type": "box", "layout": "vertical",
-                         "backgroundColor": "#1F0A0A", "cornerRadius": "10px",
-                         "paddingAll": "10px", "flex": 1,
+                         "backgroundColor": "#1F0A0A", "cornerRadius": "8px",
+                         "paddingAll": "8px", "flex": 1,
                          "contents": [
-                             {"type": "text", "text": "🛡  STOP", "size": "xxs",
+                             {"type": "text", "text": "🛡 STOP", "size": "xxs",
                               "color": "#7D2E2E", "weight": "bold"},
                              {"type": "text", "text": f"{currency}{sl:,.2f}",
-                              "size": "md", "color": "#FF8A80", "weight": "bold"},
+                              "size": "sm", "color": "#FF8A80", "weight": "bold"},
                              {"type": "text", "text": f"{pct_sl:+.1f}%",
                               "size": "xxs", "color": "#7D2E2E"},
                          ]},
@@ -238,20 +278,20 @@ def flex_intraday_card(ticker, sig, price, rsi, tp, sl, tp_src, reason, currency
 
                     # R:R + conviction bar pill
                     {"type": "box", "layout": "horizontal", "margin": "xs", "contents": [
-                        {"type": "text", "text": f"📏  R:R  1 : {rr:.1f}",
-                         "color": "#90CAF9", "size": "xs", "flex": 1},
+                        {"type": "text", "text": f"📏 R:R  1:{rr:.1f}",
+                         "color": "#90CAF9", "size": "xxs", "flex": 1},
                         {"type": "box", "layout": "vertical", "flex": 0,
-                         "backgroundColor": "#1A2332", "cornerRadius": "10px",
-                         "paddingStart": "8px", "paddingEnd": "8px",
+                         "backgroundColor": "#1A2332", "cornerRadius": "8px",
+                         "paddingStart": "7px", "paddingEnd": "7px",
                          "paddingTop": "2px", "paddingBottom": "2px",
                          "contents": [{"type": "text", "text": conv_bar,
-                                       "size": "xs", "color": bc}]},
+                                       "size": "xxs", "color": bc}]},
                     ]},
                 ]
             },
             "footer": {
                 "type": "box", "layout": "vertical",
-                "backgroundColor": "#070F18", "paddingAll": "10px",
+                "backgroundColor": "#070F18", "paddingAll": "8px",
                 "contents": [
                     {"type": "button",
                      "action": {"type": "uri", "label": "📊 ดูกราฟ 1H", "uri": tv_url(ticker)},
