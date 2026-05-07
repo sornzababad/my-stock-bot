@@ -352,19 +352,11 @@ def main():
         if not res: continue
 
         sig, price, rsi, tp, sl, tp_src, reason = res
-
-        headlines  = fetch_top_news(ticker)
-        ai_text    = analyze_with_claude(ticker, sig, price, rsi, tp, sl, headlines)
-        info, conv = parse_analysis(ai_text)
-        print(f"[SIGNAL] {ticker} {sig} RSI:{rsi:.1f} conv:{conv}/5 src:{tp_src}")
-
-        if conv < 3:
-            filtered += 1
-            continue
-
         is_thai  = ticker.endswith(".BK")
         currency = "฿" if is_thai else "$"
         rr       = abs(tp - price) / abs(price - sl) if tp and sl and abs(price - sl) > 0 else 0
+
+        print(f"[SIGNAL] {ticker} {sig} RSI:{rsi:.1f} src:{tp_src}")
         compact_signals.append({
             "ticker":    ticker,
             "sig":       sig,
@@ -374,10 +366,9 @@ def main():
             "currency":  currency,
             "chart_url": tv_url(ticker),
         })
-        time.sleep(0.2)
 
     total = len(INTRADAY_STOCKS)
-    print(f"[DONE] สแกน {total} | สัญญาณ {len(compact_signals)} | filtered {filtered} | error {errors}")
+    print(f"[DONE] สแกน {total} | สัญญาณ {len(compact_signals)} | error {errors}")
 
     if errors > total // 2:
         push_flex({
