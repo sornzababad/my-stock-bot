@@ -485,12 +485,18 @@ def send_market(sigs, flag, market, idx_name, idx_price, idx_chg,
     for _, _, (card, _) in sigs:
         bubbles.append(card['contents'])
 
-    carousel = {
-        "type": "flex",
-        "altText": header.get('altText', f"{flag} {market} Alert"),
-        "contents": {"type": "carousel", "contents": bubbles[:12]}
-    }
-    push_messages([carousel])
+    total_pages = (len(bubbles) + 9) // 10
+    for i in range(0, len(bubbles), 10):
+        chunk    = bubbles[i:i + 10]
+        page_num = i // 10 + 1
+        suffix   = f" ({page_num}/{total_pages})" if total_pages > 1 else ""
+        push_messages([{
+            "type": "flex",
+            "altText": header.get('altText', f"{flag} {market} Alert") + suffix,
+            "contents": {"type": "carousel", "contents": chunk}
+        }])
+        if i + 10 < len(bubbles):
+            time.sleep(0.5)
 
 # ── MAIN ─────────────────────────────────────────────────────────
 

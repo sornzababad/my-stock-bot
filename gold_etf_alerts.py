@@ -495,21 +495,35 @@ def send_gold_etf_alerts(push_fn):
 
     # 5. Send overview carousel (gold + category summaries)
     if bubbles:
-        push_fn([{
-            "type": "flex",
-            "altText": "🥇 Gold & ETF Overview",
-            "contents": {"type": "carousel", "contents": bubbles[:12]},
-        }])
+        total_pages = (len(bubbles) + 9) // 10
+        for i in range(0, len(bubbles), 10):
+            chunk    = bubbles[i:i + 10]
+            page_num = i // 10 + 1
+            suffix   = f" ({page_num}/{total_pages})" if total_pages > 1 else ""
+            push_fn([{
+                "type": "flex",
+                "altText": f"🥇 Gold & ETF Overview{suffix}",
+                "contents": {"type": "carousel", "contents": chunk},
+            }])
+            if i + 10 < len(bubbles):
+                time.sleep(0.5)
 
     time.sleep(0.5)
 
     # 6. Send signal cards (if any)
     if signal_bubbles:
-        push_fn([{
-            "type": "flex",
-            "altText": f"📡 ETF Signals — {len(signal_bubbles)} สัญญาณ",
-            "contents": {"type": "carousel", "contents": signal_bubbles[:12]},
-        }])
+        total_pages = (len(signal_bubbles) + 9) // 10
+        for i in range(0, len(signal_bubbles), 10):
+            chunk    = signal_bubbles[i:i + 10]
+            page_num = i // 10 + 1
+            suffix   = f" ({page_num}/{total_pages})" if total_pages > 1 else ""
+            push_fn([{
+                "type": "flex",
+                "altText": f"📡 ETF Signals — {len(signal_bubbles)} สัญญาณ{suffix}",
+                "contents": {"type": "carousel", "contents": chunk},
+            }])
+            if i + 10 < len(signal_bubbles):
+                time.sleep(0.5)
     else:
         print("[GOLD/ETF] No ETF signals today — skipping signal push")
 
