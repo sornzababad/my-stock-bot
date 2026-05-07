@@ -356,7 +356,16 @@ def main():
         currency = "฿" if is_thai else "$"
         rr       = abs(tp - price) / abs(price - sl) if tp and sl and abs(price - sl) > 0 else 0
 
-        print(f"[SIGNAL] {ticker} {sig} RSI:{rsi:.1f} src:{tp_src}")
+        # Claude AI conviction filter — keeps only quality signals
+        headlines = fetch_top_news(ticker)
+        analysis  = analyze_with_claude(ticker, sig, price, rsi, tp, sl, headlines)
+        _, conv   = parse_analysis(analysis)
+        if conv < 2:
+            print(f"[SKIP] {ticker} {sig} RSI:{rsi:.1f} — conv {conv}/5 too low")
+            filtered += 1
+            continue
+
+        print(f"[SIGNAL] {ticker} {sig} RSI:{rsi:.1f} conv:{conv}/5 src:{tp_src}")
         compact_signals.append({
             "ticker":    ticker,
             "sig":       sig,
@@ -368,7 +377,7 @@ def main():
         })
 
     total = len(INTRADAY_STOCKS)
-    print(f"[DONE] สแกน {total} | สัญญาณ {len(compact_signals)} | error {errors}")
+    print(f"[DONE] สแกน {total} | สัญญาณ {len(compact_signals)} | กรอง {filtered} | error {errors}")
 
     if errors > total // 2:
         push_flex({
