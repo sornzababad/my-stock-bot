@@ -8,8 +8,6 @@ import pandas as pd
 import anthropic
 import os, re, time
 from datetime import datetime, timezone, timedelta
-from compact_cards import build_compact_carousels
-from ticker_info import get_name
 
 TZ_THAI    = timezone(timedelta(hours=7))
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
@@ -472,8 +470,8 @@ def send_gold_etf_alerts(push_fn):
         if rows:
             bubbles.append(flex_etf_category_summary(cat_name, rows))
 
-    # 4. Scan for signals (EMA crossover) — collect as compact signal dicts
-    compact_signals = []
+    # 4. Scan for signals (EMA crossover)
+    signal_bubbles = []
     filtered = 0
     for ticker in ALL_ETF_TICKERS:
         res = check_etf_signal(ticker)
@@ -488,19 +486,11 @@ def send_gold_etf_alerts(push_fn):
             filtered += 1
             continue
 
-        rr = abs(tp - price) / abs(price - sl) if tp and sl and abs(price - sl) > 0 else 0
-        compact_signals.append({
-            "ticker":    ticker,
-            "sig":       sig,
-            "price":     price,
-            "rsi":       rsi,
-            "rr":        rr,
-            "currency":  "$",
-            "chart_url": tv_chart_url(ticker),
-        })
+        card = flex_etf_signal_card(ticker, sig, price, rsi, atr, ec, bp, ai, conv, tp, sl)
+        signal_bubbles.append(card)
         time.sleep(0.2)
 
-    print(f"[GOLD/ETF] quotes={len(quotes)} signals={len(compact_signals)} "
+    print(f"[GOLD/ETF] quotes={len(quotes)} signals={len(signal_bubbles)} "
           f"filtered={filtered}  {round(time.time()-t0,1)}s")
 
     # 5. Send overview carousel (gold + category summaries)
@@ -520,13 +510,20 @@ def send_gold_etf_alerts(push_fn):
 
     time.sleep(0.5)
 
-    # 6. Send signal cards as compact sector-grouped cards
-    if compact_signals:
-        build_compact_carousels(
-            compact_signals,
-            push_fn=push_fn,
-            alt_prefix="📡 ETF Signals",
-        )
+    # 6. Send signal cards (if any)
+    if signal_bubbles:
+        total_pages = (len(signal_bubbles) + 9) // 10
+        for i in range(0, len(signal_bubbles), 10):
+            chunk    = signal_bubbles[i:i + 10]
+            page_num = i // 10 + 1
+            suffix   = f" ({page_num}/{total_pages})" if total_pages > 1 else ""
+            push_fn([{
+                "type": "flex",
+                "altText": f"📡 ETF Signals — {len(signal_bubbles)} สัญญาณ{suffix}",
+                "contents": {"type": "carousel", "contents": chunk},
+            }])
+            if i + 10 < len(signal_bubbles):
+                time.sleep(0.5)
     else:
         print("[GOLD/ETF] No ETF signals today — skipping signal push")
 
