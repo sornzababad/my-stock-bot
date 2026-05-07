@@ -389,13 +389,19 @@ def main():
 
     now_str = datetime.now(TZ_THAI).strftime("%d %b %Y  %H:%M")
     if signals:
-        bubbles = [card['contents'] for card in signals]
-        carousel = {
-            "type": "flex",
-            "altText": f"⏰ Intraday Alert — {len(signals)} สัญญาณ  {now_str}",
-            "contents": {"type": "carousel", "contents": bubbles[:12]}
-        }
-        push_flex(carousel)
+        bubbles     = [card['contents'] for card in signals]
+        total_pages = (len(bubbles) + 9) // 10
+        for i in range(0, len(bubbles), 10):
+            chunk    = bubbles[i:i + 10]
+            page_num = i // 10 + 1
+            suffix   = f" ({page_num}/{total_pages})" if total_pages > 1 else ""
+            push_flex({
+                "type": "flex",
+                "altText": f"⏰ Intraday Alert — {len(signals)} สัญญาณ  {now_str}{suffix}",
+                "contents": {"type": "carousel", "contents": chunk}
+            })
+            if i + 10 < len(bubbles):
+                time.sleep(0.5)
     else:
         push_flex({
             "type": "flex", "altText": f"😴 Intraday — ไม่พบสัญญาณ  {now_str}",
