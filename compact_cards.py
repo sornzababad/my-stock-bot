@@ -172,16 +172,41 @@ def build_compact_carousels(all_signals, push_fn, alt_prefix="📡 Signals"):
         )
 
     # Send in chunks of 10
-    total = len(all_signals)
+    import time as _time
+    total       = len(all_signals)
     total_pages = (len(bubbles) + 9) // 10
+
+    # When split across multiple messages, send a plain-text summary first
+    # so the user knows how many carousel messages to scroll through.
+    if total_pages > 1:
+        sector_names = [name for _, name, _ in sector_order]
+        summary_lines = [f"📊 {alt_prefix}"]
+        summary_lines.append(f"พบ {total} สัญญาณ ใน {total_pages} ชุดข้อความ — เลื่อนขึ้นเพื่อดูทั้งหมด ↑")
+        summary_lines.append("")
+        for i in range(0, len(sector_names), 10):
+            chunk_names = sector_names[i:i + 10]
+            pg = i // 10 + 1
+            summary_lines.append(f"ชุดที่ {pg}: {', '.join(chunk_names)}")
+        push_fn([{
+            "type": "text",
+            "text": "\n".join(summary_lines),
+        }])
+        _time.sleep(0.3)
+
     for i in range(0, len(bubbles), 10):
         chunk    = bubbles[i:i + 10]
         page_num = i // 10 + 1
-        suffix   = f" ({page_num}/{total_pages})" if total_pages > 1 else ""
+        # Include sector names covered by this page in the altText
+        page_sectors = [name for _, name, _ in sector_order[i:i + 10]]
+        sectors_str  = ", ".join(page_sectors)
+        if total_pages > 1:
+            alt = f"{alt_prefix} ({page_num}/{total_pages}) — {sectors_str}"
+        else:
+            alt = f"{alt_prefix} — {total} สัญญาณ | {sectors_str}"
         push_fn([{
             "type": "flex",
-            "altText": f"{alt_prefix} — {total} สัญญาณ{suffix}",
+            "altText": alt,
             "contents": {"type": "carousel", "contents": chunk},
         }])
         if i + 10 < len(bubbles):
-            import time; time.sleep(0.5)
+            _time.sleep(0.5)
