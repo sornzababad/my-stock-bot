@@ -13,6 +13,7 @@ import anthropic
 import os, re, time, json
 from users import load_users
 from datetime import datetime, timezone, timedelta
+from gold_etf_alerts import send_gold_etf_alerts
 
 TZ_THAI = timezone(timedelta(hours=7))
 LINE_TOKEN = os.getenv('CHANNEL_ACCESS_TOKEN')
@@ -530,6 +531,8 @@ def main():
     send_market(us_sigs,"🗽","US","S&P 500",sp_p,sp_c,us_count,scan_s,filtered)
     time.sleep(1)
     send_smallcap_alerts()
+    time.sleep(1)
+    send_gold_etf_alerts(push_messages)
 
 if __name__ == "__main__":
     main()
