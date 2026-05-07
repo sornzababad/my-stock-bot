@@ -10,6 +10,7 @@ import anthropic
 import os, re, time, json
 from users import load_users
 from datetime import datetime, timezone, timedelta
+from compact_cards import build_compact_carousels
 
 TZ_THAI    = timezone(timedelta(hours=7))
 LINE_TOKEN = os.getenv('CHANNEL_ACCESS_TOKEN')
@@ -337,7 +338,7 @@ def main():
     now = datetime.now(TZ_THAI)
     print(f"[INTRADAY] {now.strftime('%Y-%m-%d %H:%M')}")
 
-    signals  = []
+    compact_signals = []
     errors   = 0
     filtered = 0
 
@@ -352,9 +353,9 @@ def main():
 
         sig, price, rsi, tp, sl, tp_src, reason = res
 
-        headlines    = fetch_top_news(ticker)
-        ai_text      = analyze_with_claude(ticker, sig, price, rsi, tp, sl, headlines)
-        info, conv   = parse_analysis(ai_text)
+        headlines  = fetch_top_news(ticker)
+        ai_text    = analyze_with_claude(ticker, sig, price, rsi, tp, sl, headlines)
+        info, conv = parse_analysis(ai_text)
         print(f"[SIGNAL] {ticker} {sig} RSI:{rsi:.1f} conv:{conv}/5 src:{tp_src}")
 
         if conv < 3:
@@ -363,13 +364,20 @@ def main():
 
         is_thai  = ticker.endswith(".BK")
         currency = "฿" if is_thai else "$"
-        display  = ticker.replace(".BK","") if is_thai else ticker
-        card     = flex_intraday_card(display, sig, price, rsi, tp, sl, tp_src, reason, currency, conv, info)
-        signals.append(card)
+        rr       = abs(tp - price) / abs(price - sl) if tp and sl and abs(price - sl) > 0 else 0
+        compact_signals.append({
+            "ticker":    ticker,
+            "sig":       sig,
+            "price":     price,
+            "rsi":       rsi,
+            "rr":        rr,
+            "currency":  currency,
+            "chart_url": tv_url(ticker),
+        })
         time.sleep(0.2)
 
     total = len(INTRADAY_STOCKS)
-    print(f"[DONE] สแกน {total} | สัญญาณ {len(signals)} | filtered {filtered} | error {errors}")
+    print(f"[DONE] สแกน {total} | สัญญาณ {len(compact_signals)} | filtered {filtered} | error {errors}")
 
     if errors > total // 2:
         push_flex({
@@ -388,20 +396,12 @@ def main():
         return
 
     now_str = datetime.now(TZ_THAI).strftime("%d %b %Y  %H:%M")
-    if signals:
-        bubbles     = [card['contents'] for card in signals]
-        total_pages = (len(bubbles) + 9) // 10
-        for i in range(0, len(bubbles), 10):
-            chunk    = bubbles[i:i + 10]
-            page_num = i // 10 + 1
-            suffix   = f" ({page_num}/{total_pages})" if total_pages > 1 else ""
-            push_flex({
-                "type": "flex",
-                "altText": f"⏰ Intraday Alert — {len(signals)} สัญญาณ  {now_str}{suffix}",
-                "contents": {"type": "carousel", "contents": chunk}
-            })
-            if i + 10 < len(bubbles):
-                time.sleep(0.5)
+    if compact_signals:
+        build_compact_carousels(
+            compact_signals,
+            push_fn=lambda msgs: push_flex(msgs[0]),
+            alt_prefix="⏰ Intraday Alert",
+        )
     else:
         push_flex({
             "type": "flex", "altText": f"😴 Intraday — ไม่พบสัญญาณ  {now_str}",
