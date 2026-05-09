@@ -73,15 +73,23 @@ INTRADAY_STOCKS = list(dict.fromkeys([
 
 def push_flex(obj):
     uids = load_users()
-    print(f"[PUSH] token={'OK' if LINE_TOKEN else 'MISSING'} | users={uids}")
+    kind = obj.get("type", "?")
+    alt  = obj.get("altText", "")[:60]
+    print(f"[PUSH] {kind} alt={alt!r} token={'OK' if LINE_TOKEN else 'MISSING'} | users={uids}")
     if not LINE_TOKEN:
         print("[PUSH] ERROR: CHANNEL_ACCESS_TOKEN not set"); return
     if not uids:
         print("[PUSH] ERROR: no users — set USER_ID or USER_IDS secret"); return
+    payload = {'to': uids, 'messages': [obj]}
+    body    = json.dumps(payload, ensure_ascii=False)
+    print(f"[PUSH] payload size: {len(body.encode('utf-8'))} bytes")
     r = requests.post('https://api.line.me/v2/bot/message/multicast',
                       headers={'Content-Type':'application/json','Authorization':f'Bearer {LINE_TOKEN}'},
-                      json={'to':uids,'messages':[obj]}, timeout=10)
-    print(f"[PUSH] {r.status_code} {r.text[:200]}")
+                      data=body.encode('utf-8'), timeout=10)
+    if r.status_code != 200:
+        print(f"[PUSH] ❌ {r.status_code} {r.text[:600]}")
+    else:
+        print(f"[PUSH] ✅ {r.status_code}")
 
 def _sep():   return {"type":"separator","color":"#37474F","margin":"sm"}
 def _kv(l,v): return {"type":"box","layout":"horizontal","margin":"xs","contents":[

@@ -7,6 +7,11 @@ from ticker_info import get_name, get_sector
 
 TZ_THAI = timezone(timedelta(hours=7))
 
+# LINE Flex limits — keep generously below to avoid rejection
+MAX_SIGNALS_PER_BUBBLE = 6   # split sector into multiple bubbles if exceeded
+MAX_BUBBLES_PER_CAROUSEL = 6 # carousel chunk size; LINE allows 12 but big bubbles
+                             # can push the message past the 50KB hard limit
+
 SECTOR_COLORS = {
     "Tech":          ("#0D1F3C", "#64B5F6"),
     "Semiconductor": ("#1A0D2E", "#CE93D8"),
@@ -27,6 +32,12 @@ SECTOR_COLORS = {
 }
 
 
+def _safe_text(s, fallback="—"):
+    """LINE Flex rejects empty text — always return at least one character."""
+    s = (s or "").strip()
+    return s if s else fallback
+
+
 def _sep():
     return {"type": "separator", "color": "#1E2D3D", "margin": "sm"}
 
@@ -35,22 +46,29 @@ def _signal_row(ticker, sig, price, rsi, rr, tp, sl, currency, chart_url):
     is_buy  = sig == "BUY"
     bc      = "#00E676" if is_buy else "#FF5252"
     arrow   = "▲" if is_buy else "▼"
-    name    = get_name(ticker)
+    name    = _safe_text(get_name(ticker), ticker)
     display = ticker.replace(".BK", "") if ticker.endswith(".BK") else ticker
 
     rsi_clr = "#FF5252" if rsi >= 70 else ("#00E676" if rsi <= 30 else "#90CAF9")
     rsi_tag = "🔺" if rsi >= 70 else ("🔻" if rsi <= 30 else "")
+    rsi_txt = _safe_text(f"RSI {rsi:.0f} {rsi_tag}".rstrip())
 
-    pct_tp = f"{(tp - price) / price * 100:+.1f}%" if tp and price else ""
-    pct_sl = f"{(sl - price) / price * 100:+.1f}%" if sl and price else ""
-    tp_txt = f"TP {currency}{tp:,.2f} {pct_tp}" if tp else ""
-    sl_txt = f"SL {currency}{sl:,.2f} {pct_sl}" if sl else ""
+    if tp and price:
+        pct_tp = (tp - price) / price * 100
+        tp_txt = f"TP {currency}{tp:,.2f} {pct_tp:+.1f}%"
+    else:
+        tp_txt = "TP —"
 
-    return {
+    if sl and price:
+        pct_sl = (sl - price) / price * 100
+        sl_txt = f"SL {currency}{sl:,.2f} {pct_sl:+.1f}%"
+    else:
+        sl_txt = "SL —"
+
+    row = {
         "type": "box", "layout": "vertical", "margin": "sm",
-        "action": {"type": "uri", "uri": chart_url},
         "contents": [
-            # Row 1: badge | ticker | company name | price
+            # Row 1: badge | ticker | name | price
             {"type": "box", "layout": "horizontal", "alignItems": "center", "contents": [
                 {"type": "box", "layout": "vertical", "flex": 0,
                  "backgroundColor": bc, "cornerRadius": "3px",
@@ -60,19 +78,19 @@ def _signal_row(ticker, sig, price, rsi, rr, tp, sl, currency, chart_url):
                                "color": "#000000", "size": "xxs", "weight": "bold"}]},
                 {"type": "box", "layout": "vertical", "flex": 4, "paddingStart": "7px",
                  "contents": [
-                     {"type": "text", "text": display,
+                     {"type": "text", "text": _safe_text(display, ticker),
                       "color": "#FFFFFF", "size": "sm", "weight": "bold"},
                      {"type": "text", "text": name,
                       "color": "#607D8B", "size": "xxs", "wrap": False},
                  ]},
-                {"type": "text", "text": f"{currency}{price:,.2f}",
+                {"type": "text", "text": _safe_text(f"{currency}{price:,.2f}"),
                  "color": bc, "size": "sm", "weight": "bold",
                  "flex": 3, "align": "end"},
             ]},
             # Row 2: RSI | TP | SL
             {"type": "box", "layout": "horizontal",
              "margin": "xs", "paddingStart": "18px", "contents": [
-                {"type": "text", "text": f"RSI {rsi:.0f} {rsi_tag}",
+                {"type": "text", "text": rsi_txt,
                  "color": rsi_clr, "size": "xxs", "flex": 2},
                 {"type": "text", "text": tp_txt,
                  "color": "#69F0AE", "size": "xxs", "flex": 3, "align": "center"},
@@ -81,13 +99,12 @@ def _signal_row(ticker, sig, price, rsi, rr, tp, sl, currency, chart_url):
             ]},
         ]
     }
+    if chart_url:
+        row["action"] = {"type": "uri", "uri": chart_url}
+    return row
 
 
-def flex_sector_bubble(sector_emoji, sector_name, signals):
-    """
-    One Flex bubble for a sector.
-    signals: list of (ticker, sig, price, rsi, rr, tp, sl, currency, chart_url)
-    """
+def _build_bubble(sector_emoji, sector_name, signals, suffix=""):
     hbg, hfg = SECTOR_COLORS.get(sector_name, ("#111827", "#9CA3AF"))
     now = datetime.now(TZ_THAI).strftime("%d %b  %H:%M")
 
@@ -98,10 +115,12 @@ def flex_sector_bubble(sector_emoji, sector_name, signals):
         pill_parts.append({"type": "text", "text": f"▲{buy_n} BUY",
                            "color": "#00E676", "size": "xxs", "weight": "bold"})
     if buy_n and sell_n:
-        pill_parts.append({"type": "text", "text": "  ", "size": "xxs"})
+        pill_parts.append({"type": "text", "text": "   ", "size": "xxs"})
     if sell_n:
         pill_parts.append({"type": "text", "text": f"▼{sell_n} SELL",
                            "color": "#FF5252", "size": "xxs", "weight": "bold"})
+    if not pill_parts:
+        pill_parts.append({"type": "text", "text": " ", "size": "xxs"})
 
     rows = []
     for i, sig_data in enumerate(signals):
@@ -109,6 +128,7 @@ def flex_sector_bubble(sector_emoji, sector_name, signals):
             rows.append(_sep())
         rows.append(_signal_row(*sig_data))
 
+    title = f"{sector_emoji} {sector_name}{suffix}"
     return {
         "type": "bubble", "size": "kilo",
         "header": {
@@ -116,7 +136,7 @@ def flex_sector_bubble(sector_emoji, sector_name, signals):
             "backgroundColor": hbg, "paddingAll": "10px", "spacing": "xs",
             "contents": [
                 {"type": "box", "layout": "horizontal", "alignItems": "center", "contents": [
-                    {"type": "text", "text": f"{sector_emoji} {sector_name}",
+                    {"type": "text", "text": _safe_text(title),
                      "weight": "bold", "size": "sm", "color": hfg, "flex": 1},
                     {"type": "text", "text": now,
                      "size": "xxs", "color": "#37474F", "align": "end"},
@@ -130,6 +150,19 @@ def flex_sector_bubble(sector_emoji, sector_name, signals):
             "spacing": "none", "contents": rows,
         }
     }
+
+
+def flex_sector_bubble(sector_emoji, sector_name, signals):
+    """One bubble per sector. Splits into multiple if too many signals."""
+    if len(signals) <= MAX_SIGNALS_PER_BUBBLE:
+        return [_build_bubble(sector_emoji, sector_name, signals)]
+    bubbles = []
+    chunks  = [signals[i:i + MAX_SIGNALS_PER_BUBBLE]
+               for i in range(0, len(signals), MAX_SIGNALS_PER_BUBBLE)]
+    for idx, chunk in enumerate(chunks, 1):
+        suffix = f" ({idx}/{len(chunks)})" if len(chunks) > 1 else ""
+        bubbles.append(_build_bubble(sector_emoji, sector_name, chunk, suffix))
+    return bubbles
 
 
 def build_compact_carousels(all_signals, push_fn, alt_prefix="📡 Signals"):
@@ -157,34 +190,40 @@ def build_compact_carousels(all_signals, push_fn, alt_prefix="📡 Signals"):
             s["currency"], s["chart_url"],
         ))
 
-    bubbles = [flex_sector_bubble(e, n, sector_map[k]) for e, n, k in sector_order]
+    bubbles = []
+    bubble_labels = []  # parallel list of sector names per bubble for altText
+    for emoji, name, key in sector_order:
+        for b in flex_sector_bubble(emoji, name, sector_map[key]):
+            bubbles.append(b)
+            bubble_labels.append(name)
 
     import time as _time
     total       = len(all_signals)
-    total_pages = (len(bubbles) + 9) // 10
+    chunk_size  = MAX_BUBBLES_PER_CAROUSEL
+    total_pages = (len(bubbles) + chunk_size - 1) // chunk_size
 
     if total_pages > 1:
-        sector_names = [n for _, n, _ in sector_order]
         lines = [f"📊 {alt_prefix}",
                  f"พบ {total} สัญญาณ ใน {total_pages} ชุดข้อความ — เลื่อนขึ้นเพื่อดูทั้งหมด ↑", ""]
-        for i in range(0, len(sector_names), 10):
-            pg = i // 10 + 1
-            lines.append(f"ชุดที่ {pg}: {', '.join(sector_names[i:i+10])}")
+        for i in range(0, len(bubble_labels), chunk_size):
+            pg = i // chunk_size + 1
+            chunk_names = list(dict.fromkeys(bubble_labels[i:i + chunk_size]))
+            lines.append(f"ชุดที่ {pg}: {', '.join(chunk_names)}")
         push_fn([{"type": "text", "text": "\n".join(lines)}])
         _time.sleep(0.3)
 
-    for i in range(0, len(bubbles), 10):
-        chunk        = bubbles[i:i + 10]
-        page_num     = i // 10 + 1
-        page_sectors = [n for _, n, _ in sector_order[i:i + 10]]
+    for i in range(0, len(bubbles), chunk_size):
+        chunk = bubbles[i:i + chunk_size]
+        page_num     = i // chunk_size + 1
+        page_sectors = list(dict.fromkeys(bubble_labels[i:i + chunk_size]))
         if total_pages > 1:
             alt = f"{alt_prefix} ({page_num}/{total_pages}) — {', '.join(page_sectors)}"
         else:
             alt = f"{alt_prefix} — {total} สัญญาณ | {', '.join(page_sectors)}"
         push_fn([{
             "type": "flex",
-            "altText": alt,
+            "altText": _safe_text(alt[:400], alt_prefix),
             "contents": {"type": "carousel", "contents": chunk},
         }])
-        if i + 10 < len(bubbles):
+        if i + chunk_size < len(bubbles):
             _time.sleep(0.5)
