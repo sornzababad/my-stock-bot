@@ -494,35 +494,36 @@ def send_gold_etf_alerts(push_fn):
           f"filtered={filtered}  {round(time.time()-t0,1)}s")
 
     # 5. Send overview carousel (gold + category summaries)
+    CHUNK = 6  # safe limit — keeps payload well under LINE's 50KB cap
     if bubbles:
-        total_pages = (len(bubbles) + 9) // 10
-        for i in range(0, len(bubbles), 10):
-            chunk    = bubbles[i:i + 10]
-            page_num = i // 10 + 1
+        total_pages = (len(bubbles) + CHUNK - 1) // CHUNK
+        for i in range(0, len(bubbles), CHUNK):
+            chunk    = bubbles[i:i + CHUNK]
+            page_num = i // CHUNK + 1
             suffix   = f" ({page_num}/{total_pages})" if total_pages > 1 else ""
             push_fn([{
                 "type": "flex",
                 "altText": f"🥇 Gold & ETF Overview{suffix}",
                 "contents": {"type": "carousel", "contents": chunk},
             }])
-            if i + 10 < len(bubbles):
+            if i + CHUNK < len(bubbles):
                 time.sleep(0.5)
 
     time.sleep(0.5)
 
     # 6. Send signal cards (if any)
     if signal_bubbles:
-        total_pages = (len(signal_bubbles) + 9) // 10
-        for i in range(0, len(signal_bubbles), 10):
-            chunk    = signal_bubbles[i:i + 10]
-            page_num = i // 10 + 1
+        total_pages = (len(signal_bubbles) + CHUNK - 1) // CHUNK
+        for i in range(0, len(signal_bubbles), CHUNK):
+            chunk    = signal_bubbles[i:i + CHUNK]
+            page_num = i // CHUNK + 1
             suffix   = f" ({page_num}/{total_pages})" if total_pages > 1 else ""
             push_fn([{
                 "type": "flex",
                 "altText": f"📡 ETF Signals — {len(signal_bubbles)} สัญญาณ{suffix}",
                 "contents": {"type": "carousel", "contents": chunk},
             }])
-            if i + 10 < len(signal_bubbles):
+            if i + CHUNK < len(signal_bubbles):
                 time.sleep(0.5)
     else:
         print("[GOLD/ETF] No ETF signals today — skipping signal push")
