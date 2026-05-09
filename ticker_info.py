@@ -24,7 +24,7 @@ SECTORS = {
     "🏭 Industrial":    ["XLI"],
     "🏘 Property":      ["LH.BK","AP.BK","CPN.BK"],
     "🚌 Transport":     ["AOT.BK","BEM.BK","BTS.BK"],
-    "📊 Broad ETF":     ["SPY","QQQ","IWM","XLK","XLF","XLV"],
+    "📊 Broad ETF":     ["SPY","QQQ","QQQM","VOO","IWM","SCHD","XLK","XLF","XLV"],
     "🥇 Gold / Metal":  ["GLD","IAU","GDX","GDXJ","SLV"],
     "🏦 Bond ETF":      ["TLT"],
 }
@@ -69,7 +69,8 @@ TICKER_NAMES: dict[str, str] = {
     "NKE":"Nike","SBUX":"Starbucks","MCD":"McDonald's","KO":"Coca-Cola",
     "PEP":"PepsiCo","BABA":"Alibaba","MELI":"MercadoLibre","SHOP":"Shopify",
     "F":"Ford","GM":"General Motors","RIVN":"Rivian",
-    "SPY":"S&P 500 ETF","QQQ":"Nasdaq 100 ETF","IWM":"Russell 2000 ETF",
+    "SPY":"S&P 500 ETF","QQQ":"Nasdaq 100 ETF","QQQM":"Invesco Nasdaq 100 ETF",
+    "VOO":"Vanguard S&P 500 ETF","IWM":"Russell 2000 ETF","SCHD":"Schwab Dividend ETF",
     "GLD":"SPDR Gold ETF","IAU":"iShares Gold ETF","GDX":"Gold Miners ETF",
     "GDXJ":"Jr Gold Miners ETF","SLV":"iShares Silver ETF",
     "TLT":"20Y Treasury ETF","SOXX":"Semiconductor ETF",

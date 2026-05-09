@@ -50,7 +50,7 @@ INTRADAY_STOCKS = list(dict.fromkeys([
     'F','GM','RIVN',
 
     # ── US ETF ───────────────────────────────────────────────────
-    'SPY','QQQ','IWM','GLD','TLT','SOXX','XLK','XLF','XLE','XLV',
+    'SPY','QQQ','QQQM','VOO','IWM','SCHD','GLD','TLT','SOXX','XLK','XLF','XLE','XLV',
 
     # ── TH Banking ───────────────────────────────────────────────
     'KBANK.BK','SCB.BK','BBL.BK','KTB.BK','TTB.BK','BAY.BK','TISCO.BK',
@@ -305,8 +305,8 @@ def find_swing_tp_sl(sig, price, atr, df, window=5):
     return tp, sl, "swing" if used_swing else "atr"
 
 def check_intraday(ticker):
-    df = yf.download(ticker, period="5d", interval="1h", progress=False, auto_adjust=True)
-    if df.empty or len(df) < 20: return None
+    df = yf.download(ticker, period="3mo", interval="1d", progress=False, auto_adjust=True)
+    if df.empty or len(df) < 30: return None
     if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
 
     d = df['Close'].diff()
