@@ -25,7 +25,7 @@ SECTORS = {
     "🏘 Property":      ["LH.BK","AP.BK","CPN.BK"],
     "🚌 Transport":     ["AOT.BK","BEM.BK","BTS.BK"],
     "📊 Broad ETF":     ["SPY","QQQ","IWM","XLK","XLF","XLV"],
-    "🥇 Gold / Metal":  ["GLD"],
+    "🥇 Gold / Metal":  ["GLD","IAU","GDX","GDXJ","SLV"],
     "🏦 Bond ETF":      ["TLT"],
 }
 
@@ -70,7 +70,9 @@ TICKER_NAMES: dict[str, str] = {
     "PEP":"PepsiCo","BABA":"Alibaba","MELI":"MercadoLibre","SHOP":"Shopify",
     "F":"Ford","GM":"General Motors","RIVN":"Rivian",
     "SPY":"S&P 500 ETF","QQQ":"Nasdaq 100 ETF","IWM":"Russell 2000 ETF",
-    "GLD":"SPDR Gold ETF","TLT":"20Y Treasury ETF","SOXX":"Semiconductor ETF",
+    "GLD":"SPDR Gold ETF","IAU":"iShares Gold ETF","GDX":"Gold Miners ETF",
+    "GDXJ":"Jr Gold Miners ETF","SLV":"iShares Silver ETF",
+    "TLT":"20Y Treasury ETF","SOXX":"Semiconductor ETF",
     "XLK":"Tech Sector ETF","XLF":"Finance Sector ETF","XLE":"Energy Sector ETF","XLV":"Health Sector ETF",
     "KBANK.BK":"Kasikorn Bank","SCB.BK":"SCB","BBL.BK":"Bangkok Bank",
     "KTB.BK":"Krungthai Bank","TTB.BK":"TMB Thanachart","BAY.BK":"Bank of Ayudhya","TISCO.BK":"TISCO",
