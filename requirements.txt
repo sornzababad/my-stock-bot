@@ -3,6 +3,7 @@ requests
 gunicorn
 yfinance
 pandas
+lxml
 gspread
 google-auth
 anthropic

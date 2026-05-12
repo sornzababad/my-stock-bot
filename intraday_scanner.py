@@ -7,7 +7,10 @@ import yfinance as yf
 import pandas as pd
 import requests
 import anthropic
+import logging
 import os, re, time, json
+
+logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 from users import load_users
 from datetime import datetime, timezone, timedelta
 from compact_cards import build_compact_carousels
@@ -53,23 +56,6 @@ INTRADAY_STOCKS = list(dict.fromkeys([
     # ── US ETF ───────────────────────────────────────────────────
     'SPY','QQQ','QQQM','VOO','IWM','SCHD','GLD','TLT','SOXX','XLK','XLF','XLE','XLV',
 
-    # ── TH Banking ───────────────────────────────────────────────
-    'KBANK.BK','SCB.BK','BBL.BK','KTB.BK','TTB.BK','BAY.BK','TISCO.BK',
-
-    # ── TH Energy ────────────────────────────────────────────────
-    'PTT.BK','PTTEP.BK','TOP.BK','OR.BK','BCP.BK','GULF.BK','GPSC.BK',
-
-    # ── TH Tech / Telecom ────────────────────────────────────────
-    'DELTA.BK','ADVANC.BK','TRUE.BK','INTUCH.BK','HANA.BK','KCE.BK',
-
-    # ── TH Health ────────────────────────────────────────────────
-    'BDMS.BK','BH.BK','BCH.BK','CHG.BK',
-
-    # ── TH Retail / Consumer ─────────────────────────────────────
-    'CPALL.BK','CRC.BK','HMPRO.BK','BJC.BK','MAKRO.BK','CBG.BK',
-
-    # ── TH Transport / Property ──────────────────────────────────
-    'AOT.BK','BEM.BK','BTS.BK','LH.BK','AP.BK','CPN.BK',
 ]))
 
 def push_flex(obj):
