@@ -14,14 +14,10 @@ from datetime import datetime
 
 def _fetch_sp500() -> list:
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(
-            "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
-            headers=headers, timeout=15
-        )
         from io import StringIO
-        tables = pd.read_html(StringIO(r.text), attrs={"id": "constituents"})
-        tickers = tables[0]["Symbol"].tolist()
+        url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
+        r = requests.get(url, timeout=15)
+        tickers = pd.read_csv(StringIO(r.text))["Symbol"].tolist()
         return [t.replace(".", "-") for t in tickers]
     except Exception as e:
         print(f"[AI_SELECT] SP500 fetch failed: {e}")
