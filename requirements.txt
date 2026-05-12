@@ -5,3 +5,4 @@ yfinance
 pandas
 gspread
 google-auth
+anthropic
