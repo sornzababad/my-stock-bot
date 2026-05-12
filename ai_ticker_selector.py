@@ -5,6 +5,7 @@ then asks Claude Haiku to pick the best 20-25 US tickers to scan today.
 Returns [] on any failure so callers fall back to hardcoded lists unchanged.
 """
 import os, json, time
+import requests
 import pandas as pd
 import yfinance as yf
 import anthropic
@@ -13,12 +14,14 @@ from datetime import datetime
 
 def _fetch_sp500() -> list:
     try:
-        tables = pd.read_html(
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(
             "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
-            attrs={"id": "constituents"}
+            headers=headers, timeout=15
         )
+        from io import StringIO
+        tables = pd.read_html(StringIO(r.text), attrs={"id": "constituents"})
         tickers = tables[0]["Symbol"].tolist()
-        # Wikipedia uses dots (BRK.B), yfinance uses dashes (BRK-B)
         return [t.replace(".", "-") for t in tickers]
     except Exception as e:
         print(f"[AI_SELECT] SP500 fetch failed: {e}")
@@ -27,14 +30,21 @@ def _fetch_sp500() -> list:
 
 def _fetch_screener_tickers() -> list:
     results = []
-    for query_name in ["most_actives", "day_gainers"]:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json",
+    }
+    for screen_id in ["most_actives", "day_gainers"]:
         try:
-            sc = yf.Screener()
-            sc.set_default_body({"scrIds": query_name, "size": 25})
-            quotes = sc.response.get("quotes", [])
+            url = (
+                "https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved"
+                f"?formatted=false&scrIds={screen_id}&count=25"
+            )
+            r = requests.get(url, headers=headers, timeout=10)
+            quotes = r.json().get("finance", {}).get("result", [{}])[0].get("quotes", [])
             results.extend(q["symbol"] for q in quotes if "symbol" in q)
         except Exception as e:
-            print(f"[AI_SELECT] Screener {query_name} failed: {e}")
+            print(f"[AI_SELECT] Screener {screen_id} failed: {e}")
     return list(dict.fromkeys(results))
 
 
