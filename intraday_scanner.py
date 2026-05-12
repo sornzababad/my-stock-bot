@@ -12,6 +12,7 @@ from users import load_users
 from datetime import datetime, timezone, timedelta
 from compact_cards import build_compact_carousels
 from ticker_info import get_name
+from ai_ticker_selector import get_ai_tickers
 
 TZ_THAI    = timezone(timedelta(hours=7))
 LINE_TOKEN = os.getenv('CHANNEL_ACCESS_TOKEN')
@@ -348,6 +349,14 @@ def main():
     compact_signals = []
     errors          = 0
     filtered        = 0
+
+    global INTRADAY_STOCKS
+    ai_picks = get_ai_tickers()
+    if ai_picks:
+        existing = set(INTRADAY_STOCKS)
+        new_us   = [t for t in ai_picks if t not in existing and not t.endswith(".BK")]
+        INTRADAY_STOCKS = INTRADAY_STOCKS + new_us
+        print(f"[AI_SELECT] Added {len(new_us)} dynamic tickers → total {len(INTRADAY_STOCKS)}")
 
     for ticker in INTRADAY_STOCKS:
         try:

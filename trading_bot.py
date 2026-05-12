@@ -12,6 +12,7 @@ import requests
 import anthropic
 import os, re, time, json
 from users import load_users
+from ai_ticker_selector import get_ai_tickers
 from datetime import datetime, timezone, timedelta
 from gold_etf_alerts import send_gold_etf_alerts
 
@@ -502,6 +503,15 @@ def send_market(sigs, flag, market, idx_name, idx_price, idx_chg,
 
 def main():
     t0 = time.time()
+
+    global STOCKS
+    ai_picks = get_ai_tickers()
+    if ai_picks:
+        existing = set(STOCKS)
+        new_us   = [t for t in ai_picks if t not in existing and not t.endswith(".BK")]
+        STOCKS   = STOCKS + new_us
+        print(f"[AI_SELECT] Added {len(new_us)} dynamic tickers → total {len(STOCKS)}")
+
     print(f"[START] {datetime.now(TZ_THAI).strftime('%Y-%m-%d %H:%M:%S')} | {len(STOCKS)} หุ้น")
 
     set_p,  set_c   = get_index("^SET.BK")
