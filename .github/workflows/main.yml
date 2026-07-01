@@ -6,18 +6,8 @@ on:
     - cron: '5 10 * * 1-5'    # 🇹🇭 SET close  17:05 ICT
     - cron: '5 21 * * 1-5'    # 🇺🇸 US  close  04:05 ICT
 
-    # ── Thai intraday (hourly during SET hours, includes noon 12:00 ICT) ───
-    - cron: '0 2-10 * * 1-5'  # 🇹🇭 SET hours  09:00-17:00 ICT
-
-    # ── US intraday (5 key market moments) ───────────────────────
-    - cron: '0 13 * * 1-5'    # 🇺🇸 30 min pre-open   20:00 ICT
-    - cron: '0 14 * * 1-5'    # 🇺🇸 30 min post-open  21:00 ICT
-    - cron: '30 16 * * 1-5'   # 🇺🇸 3 hrs after open  23:30 ICT
-    - cron: '0 17 * * 1-5'    # 🇺🇸 3 hrs pre-close   00:00 ICT
-
-    # ── Pre-market news ───────────────────────────────────────────
-    - cron: '30 1 * * 1-5'   # 🇹🇭 SET pre-market  08:30 ICT
-    - cron: '30 13 * * 1-5'  # 🇺🇸 US  pre-market  20:30 ICT
+    # ── Single midday check-in (replaces hourly/multi-run intraday spam) ──
+    - cron: '0 5 * * 1-5'     # 🕛 Midday check  12:00 ICT
 
     # ── Weekly summary (Friday 17:30 ICT) ─────────────────────────
     - cron: '30 10 * * 5'
@@ -78,12 +68,6 @@ jobs:
             echo "market=$MARKET" >> $GITHUB_OUTPUT
           elif [ "$HOUR" = "10" ] && [ "$MIN" = "30" ]; then
             echo "script=weekly"    >> $GITHUB_OUTPUT
-          elif [ "$HOUR" = "01" ] && [ "$MIN" = "30" ]; then
-            echo "script=premarket" >> $GITHUB_OUTPUT
-            echo "market=thai"      >> $GITHUB_OUTPUT
-          elif [ "$HOUR" = "13" ] && [ "$MIN" = "30" ]; then
-            echo "script=premarket" >> $GITHUB_OUTPUT
-            echo "market=us"        >> $GITHUB_OUTPUT
           elif [ "$HOUR" = "10" ]; then
             echo "script=daily"     >> $GITHUB_OUTPUT
             echo "market=thai"      >> $GITHUB_OUTPUT
