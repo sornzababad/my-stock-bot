@@ -2,12 +2,10 @@ name: Trading Bot
 
 on:
   schedule:
-    # ── Daily close scanners ──────────────────────────────────────
-    - cron: '5 10 * * 1-5'    # 🇹🇭 SET close  17:05 ICT
-    - cron: '5 21 * * 1-5'    # 🇺🇸 US  close  04:05 ICT
-
-    # ── Single midday check-in (replaces hourly/multi-run intraday spam) ──
-    - cron: '0 5 * * 1-5'     # 🕛 Midday check  12:00 ICT
+    # ── Daily check-ins (ICT = UTC+7) ──────────────────────────────
+    - cron: '0 14 * * 1-5'    # 🇹🇭 Thai market update  21:00 ICT
+    - cron: '0 16 * * 1-5'    # 🇺🇸 US   market update  23:00 ICT
+    - cron: '0 23 * * 0-4'    # 🌅 Morning check        06:00 ICT (next day)
 
     # ── Weekly summary (Friday 17:30 ICT) ─────────────────────────
     - cron: '30 10 * * 5'
@@ -68,10 +66,10 @@ jobs:
             echo "market=$MARKET" >> $GITHUB_OUTPUT
           elif [ "$HOUR" = "10" ] && [ "$MIN" = "30" ]; then
             echo "script=weekly"    >> $GITHUB_OUTPUT
-          elif [ "$HOUR" = "10" ]; then
+          elif [ "$HOUR" = "14" ]; then
             echo "script=daily"     >> $GITHUB_OUTPUT
             echo "market=thai"      >> $GITHUB_OUTPUT
-          elif [ "$HOUR" = "21" ]; then
+          elif [ "$HOUR" = "16" ]; then
             echo "script=daily"     >> $GITHUB_OUTPUT
             echo "market=us"        >> $GITHUB_OUTPUT
           else
