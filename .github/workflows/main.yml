@@ -2,10 +2,11 @@ name: Trading Bot
 
 on:
   schedule:
-    # ── Daily check-ins (ICT = UTC+7) ──────────────────────────────
-    - cron: '0 14 * * 1-5'    # 🇹🇭 Thai market update  21:00 ICT
-    - cron: '0 16 * * 1-5'    # 🇺🇸 US   market update  23:00 ICT
-    - cron: '0 23 * * 0-4'    # 🌅 Morning check        06:00 ICT (next day)
+    # ── Daily check-ins, timed to the US session (ICT = UTC+7) ─────
+    # Minutes offset from :00 to dodge GitHub Actions' top-of-hour queue delay.
+    - cron: '35 14 * * 1-5'   # 🔔 US market open    21:35 ICT
+    - cron: '30 15 * * 1-5'   # 🔔 US mid-session     22:30 ICT
+    - cron: '30 21 * * 0-4'   # 🔔 US market close     04:30 ICT (next day)
 
     # ── Weekly summary (Friday 17:30 ICT) ─────────────────────────
     - cron: '30 10 * * 5'
@@ -66,14 +67,9 @@ jobs:
             echo "market=$MARKET" >> $GITHUB_OUTPUT
           elif [ "$HOUR" = "10" ] && [ "$MIN" = "30" ]; then
             echo "script=weekly"    >> $GITHUB_OUTPUT
-          elif [ "$HOUR" = "14" ]; then
-            echo "script=daily"     >> $GITHUB_OUTPUT
-            echo "market=thai"      >> $GITHUB_OUTPUT
-          elif [ "$HOUR" = "16" ]; then
-            echo "script=daily"     >> $GITHUB_OUTPUT
-            echo "market=us"        >> $GITHUB_OUTPUT
           else
-            echo "script=intraday"  >> $GITHUB_OUTPUT
+            echo "script=daily"     >> $GITHUB_OUTPUT
+            echo "market=both"      >> $GITHUB_OUTPUT
           fi
 
       - name: Run daily scanner
@@ -82,8 +78,7 @@ jobs:
           CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_ACCESS_TOKEN }}
           USER_ID:               ${{ secrets.LINE_USER_ID }}
           ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          python trading_bot.py --market "${{ steps.decide.outputs.market || 'both' }}" 2>/dev/null || python trading_bot.py
+        run: python trading_bot.py
 
       - name: Run intraday scanner
         if: steps.decide.outputs.script == 'intraday'
