@@ -2,7 +2,7 @@ name: Trading Bot
 
 on:
   schedule:
-    # ── Daily check-ins, timed to the US session (ICT = UTC+7) ─────
+    # ── Sector-card check-ins (intraday_scanner.py), timed to the US session (ICT = UTC+7) ─
     # Minutes offset from :00 to dodge GitHub Actions' top-of-hour queue delay.
     - cron: '35 14 * * 1-5'   # 🔔 US market open    21:35 ICT
     - cron: '30 15 * * 1-5'   # 🔔 US mid-session     22:30 ICT
@@ -68,8 +68,7 @@ jobs:
           elif [ "$HOUR" = "10" ] && [ "$MIN" = "30" ]; then
             echo "script=weekly"    >> $GITHUB_OUTPUT
           else
-            echo "script=daily"     >> $GITHUB_OUTPUT
-            echo "market=both"      >> $GITHUB_OUTPUT
+            echo "script=intraday"  >> $GITHUB_OUTPUT
           fi
 
       - name: Run daily scanner
