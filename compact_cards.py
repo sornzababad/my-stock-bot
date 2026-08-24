@@ -42,7 +42,8 @@ def _sep():
     return {"type": "separator", "color": "#1E2D3D", "margin": "sm"}
 
 
-def _signal_row(ticker, sig, price, rsi, rr, tp, sl, currency, chart_url):
+def _signal_row(ticker, sig, price, rsi, rr, tp, sl, currency, chart_url,
+                 sr_support=None, sr_resistance=None):
     is_buy  = sig == "BUY"
     bc      = "#00E676" if is_buy else "#FF5252"
     arrow   = "▲" if is_buy else "▼"
@@ -99,6 +100,23 @@ def _signal_row(ticker, sig, price, rsi, rr, tp, sl, currency, chart_url):
             ]},
         ]
     }
+
+    # Row 3: confluence-scored support/resistance zone, if one qualified nearby
+    if sr_support or sr_resistance:
+        sup_txt = (f"🛡{currency}{sr_support['high']:,.2f}({sr_support['score']})"
+                   if sr_support else "🛡 —")
+        res_txt = (f"🎯{currency}{sr_resistance['low']:,.2f}({sr_resistance['score']})"
+                   if sr_resistance else "🎯 —")
+        row["contents"].append({
+            "type": "box", "layout": "horizontal",
+            "margin": "xs", "paddingStart": "18px", "contents": [
+                {"type": "text", "text": _safe_text(sup_txt),
+                 "color": "#80CBC4", "size": "xxs", "flex": 1},
+                {"type": "text", "text": _safe_text(res_txt),
+                 "color": "#FFCC80", "size": "xxs", "flex": 1, "align": "end"},
+            ]
+        })
+
     if chart_url:
         row["action"] = {"type": "uri", "uri": chart_url}
     return row
@@ -170,7 +188,8 @@ def build_compact_carousels(all_signals, push_fn, alt_prefix="📡 Signals"):
     Group signals by sector and send as compact carousel(s).
 
     all_signals: list of dicts with keys:
-        ticker, sig, price, rsi, rr, tp, sl, currency, chart_url
+        ticker, sig, price, rsi, rr, tp, sl, currency, chart_url,
+        sr_support (optional), sr_resistance (optional)
     push_fn: callable(list_of_messages)
     """
     if not all_signals:
@@ -188,6 +207,7 @@ def build_compact_carousels(all_signals, push_fn, alt_prefix="📡 Signals"):
             s["ticker"], s["sig"], s["price"], s["rsi"],
             s.get("rr", 0), s.get("tp"), s.get("sl"),
             s["currency"], s["chart_url"],
+            s.get("sr_support"), s.get("sr_resistance"),
         ))
 
     bubbles = []

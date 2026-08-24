@@ -16,6 +16,7 @@ from datetime import datetime, timezone, timedelta
 from compact_cards import build_compact_carousels
 from ticker_info import get_name
 from ai_ticker_selector import get_ai_tickers
+from support_resistance import find_key_zones
 
 TZ_THAI    = timezone(timedelta(hours=7))
 LINE_TOKEN = os.getenv('CHANNEL_ACCESS_TOKEN')
@@ -326,7 +327,8 @@ def check_intraday(ticker):
         return None
 
     tp, sl, tp_src = find_swing_tp_sl(sig, price, atr, df)
-    return (sig, price, rsi, tp, sl, tp_src, reason)
+    sr_support, sr_resistance = find_key_zones(df, price)
+    return (sig, price, rsi, tp, sl, tp_src, reason, sr_support, sr_resistance)
 
 def main():
     now = datetime.now(TZ_THAI)
@@ -353,7 +355,7 @@ def main():
             continue
         if not res: continue
 
-        sig, price, rsi, tp, sl, tp_src, reason = res
+        sig, price, rsi, tp, sl, tp_src, reason, sr_support, sr_resistance = res
 
         headlines  = fetch_top_news(ticker)
         ai_text    = analyze_with_claude(ticker, sig, price, rsi, tp, sl, headlines)
@@ -377,6 +379,8 @@ def main():
             "sl":        sl,
             "currency":  currency,
             "chart_url": tv_url(ticker),
+            "sr_support":    sr_support,
+            "sr_resistance": sr_resistance,
         })
         time.sleep(0.2)
 
