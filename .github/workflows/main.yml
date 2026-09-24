@@ -4,6 +4,9 @@ on:
   schedule:
     # ── Sector-card check-ins (intraday_scanner.py), timed to the US session (ICT = UTC+7) ─
     # Minutes offset from :00 to dodge GitHub Actions' top-of-hour queue delay.
+    # NOTE: GitHub's `schedule:` trigger is best-effort and can run hours late
+    # under load — these times are targets, not guarantees.
+    - cron: '33 11 * * 1-5'   # 🔔 Early buffer       18:33 ICT (extra attempt in case later slots run late)
     - cron: '35 14 * * 1-5'   # 🔔 US market open    21:35 ICT
     - cron: '30 15 * * 1-5'   # 🔔 US mid-session     22:30 ICT
     - cron: '30 21 * * 0-4'   # 🔔 US market close     04:30 ICT (next day)
